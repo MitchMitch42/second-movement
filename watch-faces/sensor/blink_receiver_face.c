@@ -42,7 +42,7 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
 
         state->light_level_border = 65440; 
         state->frequency = 8;
-        state->frequency_rising_edge = 16;
+        state->frequency_rising_edge = 8;
     }
 }
 
@@ -65,9 +65,9 @@ uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_
 }
 
 //set local time to received timestamp
-void blink_receiver_handle_timeset(blink_receiver_state_t *state)
+void blink_receiver_handle_timeset(blink_receiver_state_t *state, bool exact)
 {
-    watch_display_text(WATCH_POSITION_TOP_LEFT, "TI");
+    watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "TE" : "TI");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
 
     char outputString2[3];
@@ -83,7 +83,9 @@ void blink_receiver_handle_timeset(blink_receiver_state_t *state)
     date_time.unit.second = state->data >> 22 & 0b111111;
     date_time.unit.minute = state->data >> 16 & 0b111111;
     date_time.unit.hour = state->data >> 11 & 0b11111;
-    movement_set_local_date_time(date_time);
+
+    if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)state->tick_cnt * 1000.0) / (double)state->frequency) + 0.5));
+    else movement_set_local_date_time(date_time);
 }
 
 //set local date to received date
@@ -102,7 +104,7 @@ void blink_receiver_handle_dateset(blink_receiver_state_t *state)
     char outputString4[5];
     snprintf(outputString4, 5, "%04d", (state->data >> 13 & 0b111111) + 2020);
     printf(outputString4);
-    watch_display_string("    ", 4);
+    watch_display_string(outputString4, 4);
     
     watch_date_time_t date_time = movement_get_local_date_time();
     date_time.unit.day = state->data >> 23 & 0b11111;
@@ -111,26 +113,37 @@ void blink_receiver_handle_dateset(blink_receiver_state_t *state)
     movement_set_local_date_time(date_time);
 }
 
+void blink_receiver_handle_totp(blink_receiver_state_t *state) { 
+    watch_display_text(WATCH_POSITION_BOTTOM, "TOTP  "); 
+    // char[]
+    // for (int i = 0; i < 5; i++) {
+    //     uint8_t first = state->packets[i] >> 8 & 0x6;
+    // }
+}
+
+void blink_receiver_handle_packet(blink_receiver_state_t *state, uint8_t header) { 
+    state->packets[header - 8] = state->data;
+}
+
 // Handle the received 4 bytes. First 3 bytes are data, last byte is checksum. 
 void blink_receiver_handle_data(blink_receiver_state_t *state) {
     uint8_t checksum = blink_receiver_calculate_checksum(state->data >> 24 & 0xFF, state->data >> 16 & 0xFF, state->data >> 8 & 0xFF);
     if (checksum == (uint8_t)(state->data & 0xFF)) { //checksum ist last 8 bits
-        switch (state->data >> 28 & 0b1111) { //header is first 4 bits
-            case 1:
-                // timestamp received
-                blink_receiver_handle_timeset(state); 
-                break;        
-            case 2:
-                // date received
-                blink_receiver_handle_dateset(state); 
-                break;
-            default: 
-                // unknown header
-                watch_display_text(WATCH_POSITION_TOP_LEFT, "__");
-                break;
+        uint8_t header = (uint8_t)(state->data >> 28 & 0b1111); //header is first 4 bits
+        if (header == 1) blink_receiver_handle_timeset(state, false); // timestamp received
+        else if (header == 2) blink_receiver_handle_dateset(state); // date received
+        else if (header == 3) blink_receiver_handle_timeset(state, true); // exact timestamp received (ms == 0)
+        else if (header >= 8) {
+            blink_receiver_handle_packet(state, header); // data as part of multiple packets received
+            if (header == 15) { // last packet of TOTP received
+                if (state->packets[0] != 0xFFFFFFFF) blink_receiver_handle_totp(state); 
+                else watch_display_text(WATCH_POSITION_BOTTOM, "FAIL"); //at least one packet had wrong crc
+            }
         }
+        else watch_display_text(WATCH_POSITION_TOP_LEFT, "__"); // unknown header
     } else {
         //wrong checksum
+        state->packets[0] = 0xFFFFFFFF; // invalidate packets 
         char outputString[3];
         snprintf(outputString, 3, "%02x", checksum);
         watch_display_text(WATCH_POSITION_TOP_LEFT, outputString);
@@ -145,9 +158,11 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_ACTIVATE:
             watch_display_text_with_fallback(WATCH_POSITION_TOP, "BLINK", "BL");
-            state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;         
+            state->last_second = 62;
+            state->mode = BLINK_RECEIVER_MODE_CALC;         
             break;
         case EVENT_TICK:
+            state->tick_cnt = (state->tick_cnt + 1) % 8;        
             switch (state->mode) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
                     // starting state: show current light value
@@ -203,7 +218,16 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                             blink_receiver_handle_data(state);
                         }
                     break;
-                          
+                case BLINK_RECEIVER_MODE_CALC:
+                    watch_display_text(WATCH_POSITION_BOTTOM, "CALC"); 
+                    if (state->last_second == 62) {
+                        state->last_second = movement_get_local_date_time().unit.second;
+                    }
+                    else if (movement_get_local_date_time().unit.second != state->last_second) {
+                        state->tick_cnt = 0;
+                        state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
+                    }
+                    break;     
                 default: //IDLE
                     break;
             }
@@ -250,6 +274,8 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             snprintf(outputString3, 3, "%2d", state->frequency);
             watch_display_string(outputString3, 2);
             movement_request_tick_frequency(state->frequency);
+            state->last_second = 62;
+            state->mode = BLINK_RECEIVER_MODE_CALC;   
             break;
         case EVENT_LIGHT_BUTTON_UP:
             //change light level border (65400 - 65500)
