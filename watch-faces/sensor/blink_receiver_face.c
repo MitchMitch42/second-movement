@@ -40,7 +40,7 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         memset(*context_ptr, 0, sizeof(blink_receiver_state_t));
         blink_receiver_state_t *state = (blink_receiver_state_t *) *context_ptr;
 
-        state->light_level_border = 65440; 
+        state->light_level_border = 65200; 
         state->frequency = 8;
         state->frequency_rising_edge = 8;
     }
@@ -69,6 +69,15 @@ void blink_receiver_handle_timeset(blink_receiver_state_t *state, bool exact)
 {
     watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "TE" : "TI");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    
+    watch_date_time_t date_time = movement_get_local_date_time();
+    date_time.unit.second = state->data >> 22 & 0b111111;
+    date_time.unit.minute = state->data >> 16 & 0b111111;
+    date_time.unit.hour = state->data >> 11 & 0b11111;
+
+    if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)state->tick_cnt * 1000.0) / (double)state->frequency) + 0.5));
+    else movement_set_local_date_time(date_time);
 
     char outputString2[3];
     snprintf(outputString2, 3, "%02d", state->data >> 11 & 0b11111);
@@ -78,14 +87,6 @@ void blink_receiver_handle_timeset(blink_receiver_state_t *state, bool exact)
     snprintf(outputString2, 3, "%02d", state->data >> 22 & 0b111111);
     watch_display_string(outputString2, 8);
     watch_set_colon();
-    
-    watch_date_time_t date_time = movement_get_local_date_time();
-    date_time.unit.second = state->data >> 22 & 0b111111;
-    date_time.unit.minute = state->data >> 16 & 0b111111;
-    date_time.unit.hour = state->data >> 11 & 0b11111;
-
-    if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)state->tick_cnt * 1000.0) / (double)state->frequency) + 0.5));
-    else movement_set_local_date_time(date_time);
 }
 
 //set local date to received date
@@ -162,7 +163,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             state->mode = BLINK_RECEIVER_MODE_CALC;         
             break;
         case EVENT_TICK:
-            state->tick_cnt = (state->tick_cnt + 1) % 8;        
+            state->tick_cnt = (state->tick_cnt + 1) % state->frequency;        
             switch (state->mode) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
                     // starting state: show current light value
@@ -211,6 +212,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                         state->bits_received++;
                         if (state->bits_received == 32) { // transmission complete                 
                             //watch_buzzer_play_note(BUZZER_NOTE_E6, 100);
+                            //state->data = 0x396F7018;
                             state->mode = BLINK_RECEIVER_MODE_IDLE;   
                             char outputString9[9];
                             snprintf(outputString9, 9, "%08x", state->data);
@@ -279,11 +281,12 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_LIGHT_BUTTON_UP:
             //change light level border (65400 - 65500)
-            state->light_level_border += 1;
+            state->light_level_border += 10;
             if (state->light_level_border > 65500)
-                state->light_level_border = 65400;
+                state->light_level_border = 65100;
             char outputString6[6];
             snprintf(outputString6, 6, "%5d", state->light_level_border);
+            watch_display_string("      ", 4);
             watch_display_string(outputString6, 4);
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
