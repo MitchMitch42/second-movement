@@ -732,10 +732,12 @@ void movement_set_local_date_time(watch_date_time_t date_time) {
 }
 
 void movement_set_local_date_time_exact(watch_date_time_t date_time, uint16_t ms) {
-    watch_rtc_enable(false);   
-    delay_ms(ms); // delay clock
-    movement_set_utc_timestamp(watch_utility_date_time_to_unix_time(date_time, movement_get_current_timezone_offset()) + 1);
-    watch_rtc_enable(true);
+    if (ms > 0) {
+        watch_rtc_enable(false);   
+        delay_ms(ms); // delay clock
+        watch_rtc_enable(true);
+    }
+    movement_set_local_date_time(date_time);
 }
 
 void movement_set_utc_timestamp(uint32_t timestamp) {
