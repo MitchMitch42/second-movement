@@ -42,6 +42,7 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
 
         state->light_level_border = 65440; 
         state->frequency = 8;
+        state->frequency_rising_edge = 16;
     }
 }
 
@@ -156,8 +157,19 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     watch_display_text(WATCH_POSITION_BOTTOM, buf);
                     break;            
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:        
-                    // watch is polling sensor with increased frequency, waiting for a riging edge (dark -> bright)
+                    // watch is polling sensor with increased frequency, waiting for a rising edge (dark -> bright)
+                    watch_display_string("    ", 2); 
+                    watch_display_string("i", 2);                  
+                    watch_display_string("i", 3);
                     state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());      
+                    watch_display_string("i", 4);                  
+                    watch_display_string("i", 5);
+
+                    char outputStringXXX[3];
+                    snprintf(outputStringXXX, 3, "%02d", state->pollCnt);
+                    state->pollCnt++;
+                    watch_display_string(outputStringXXX, 6);
+
                     if (state->light_level < state->light_level_border) { //rising edge detected: transmission has started
                         //watch_buzzer_play_note(BUZZER_NOTE_E6, 100);  
                         state->bits_received = 0;
@@ -168,7 +180,15 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     break;
                 case BLINK_RECEIVER_MODE_RECORD:     
                         // read light sensor and save value (dark = 0, bright = 1) to corresponding bit in state->data
-                        state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());
+                        watch_display_string("    ", 2); 
+                        watch_display_string("o", 2);                  
+                        watch_display_string("o", 3);
+                        state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());           
+                        watch_display_string("o", 4);                  
+                        watch_display_string("o", 5);               
+                        char outputStringXX[3];
+                        snprintf(outputStringXX, 3, "%02d", state->bits_received);
+                        watch_display_string(outputStringXX, 8);
                         state->data = state->data << 1;
                         if (state->light_level < state->light_level_border) {         
                             state->data += 1;              
@@ -196,9 +216,10 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     // start listening
                     //watch_buzzer_play_note(BUZZER_NOTE_E5, 100);
                     state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
-                    movement_request_tick_frequency(state->frequency * 2); //increase frequency to make sure that the first rising edge is detected as fast as possible
+                    movement_request_tick_frequency(state->frequency_rising_edge); //increase frequency to make sure that the first rising edge is detected as fast as possible
                     watch_display_string("        ", 2);
                     watch_clear_colon();
+                    state->pollCnt = 0;
                     break;
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:
                 case BLINK_RECEIVER_MODE_RECORD:
@@ -210,6 +231,15 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 default:
                     break;
             }
+            break;
+        case EVENT_ALARM_LONG_PRESS:
+            //change frequency_rising_edge (1 Hz - 64 Hz)
+            state->frequency_rising_edge *= 2;
+            if (state->frequency_rising_edge > 64)
+                state->frequency_rising_edge = 1;
+            char outputString4[3];
+            snprintf(outputString4, 3, "%2d", state->frequency_rising_edge);
+            watch_display_string(outputString4, 2);
             break;
         case EVENT_LIGHT_LONG_PRESS:
             //change frequency (1 Hz - 32 Hz)
