@@ -81,7 +81,6 @@ typedef struct {
     uint8_t settings_state : 4;
     uint8_t current_timer : 4;
     uint8_t set_timers : 4;
-    bool erase_timer_flag : 1;
     timer_mode_t mode : 3;
     bool quick_cycle : 1;
 } timer_state_t;
