@@ -90,7 +90,7 @@ static void _draw(timer_state_t *state, uint8_t subsecond) {
             watch_set_indicator(WATCH_INDICATOR_BELL);
             break;
         case setting:
-            if (state->settings_state == 3) {
+            if (state->settings_state == 2) {
                 // ask it the current timer shall be erased
                 sprintf(bottom_time, "CLEAR%c", 'n');
                 watch_clear_colon();
@@ -155,7 +155,7 @@ static void _settings_increment(timer_state_t *state) {
         // case 0:
         //     state->current_timer = (state->current_timer + 1) % TIMER_SLOTS;
         //     break;
-        case 3:
+        case 2:
             //state->erase_timer_flag ^= 1;
             break;
         case 0:
@@ -164,9 +164,9 @@ static void _settings_increment(timer_state_t *state) {
         case 1:
             state->timers[state->current_timer].unit.minutes = (state->timers[state->current_timer].unit.minutes + 1) % 60;
             break;
-        case 2:
-            state->timers[state->current_timer].unit.seconds = (state->timers[state->current_timer].unit.seconds + 1) % 60;
-            break;
+        // case 2:
+        //     state->timers[state->current_timer].unit.seconds = (state->timers[state->current_timer].unit.seconds + 1) % 60;
+        //     break;
         // case 5:
         //     state->timers[state->current_timer].unit.repeat ^= 1;
         //     break;
@@ -269,8 +269,8 @@ bool timer_face_loop(movement_event_t event, void *context) {
                     movement_request_tick_frequency(4);
                     break;
                 case setting:
-                    state->settings_state = (state->settings_state + 1) % 4;
-                    if (state->settings_state == 3 && state->timers[state->current_timer].value == 0) state->settings_state = 0;
+                    state->settings_state = (state->settings_state + 1) % 3;
+                    if (state->settings_state == 2 && state->timers[state->current_timer].value == 0) state->settings_state = 0;
                     //else if (state->settings_state == 5 && (state->timers[state->current_timer].value & 0xFFFFFF) == 0) state->settings_state = 0;
                     
                     if(state->settings_state == 0) {
@@ -309,7 +309,7 @@ bool timer_face_loop(movement_event_t event, void *context) {
                     break;
                 }
                 case setting:
-                    if (state->settings_state == 3) {
+                    if (state->settings_state == 2) {
                         state->timers[state->current_timer].value = 0;
                         state->settings_state = 0;
                     } else {
@@ -342,7 +342,7 @@ bool timer_face_loop(movement_event_t event, void *context) {
                         //     break;
                         case 0:
                         case 1:
-                        case 2:
+                        //case 2:
                             state->quick_cycle = true;
                             movement_request_tick_frequency(8);
                             break;
