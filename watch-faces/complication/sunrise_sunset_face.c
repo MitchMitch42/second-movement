@@ -76,7 +76,7 @@ static void _sunrise_sunset_face_update(sunrise_sunset_state_t *state) {
     }
 
     if (movement_location.reg == 0) {
-        watch_display_text_with_fallback(WATCH_POSITION_TOP, "Sunri", "rI");
+        watch_display_text_with_fallback(WATCH_POSITION_TOP, "Sunri", "AU");
         watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "No LOC", "No Loc");
         return;
     }
@@ -102,8 +102,8 @@ static void _sunrise_sunset_face_update(sunrise_sunset_state_t *state) {
             watch_clear_colon();
             watch_clear_indicator(WATCH_INDICATOR_PM);
             watch_clear_indicator(WATCH_INDICATOR_24H);
-            if (result == 1) watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "SET", "SE");
-            else watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "RIS", "rI");
+            if (result == 1) watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "SET", "UN");
+            else watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "RIS", "AU");
             sprintf(buf, "%2d", scratch_time.unit.day);
             watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
             watch_display_text(WATCH_POSITION_BOTTOM, "None  ");
@@ -144,7 +144,7 @@ static void _sunrise_sunset_face_update(sunrise_sunset_state_t *state) {
                     if (watch_utility_convert_to_12_hour(&scratch_time)) watch_set_indicator(WATCH_INDICATOR_PM);
                     else watch_clear_indicator(WATCH_INDICATOR_PM);
                 }
-                watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "RIS", "rI");
+                watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "RIS", "AU");
                 sprintf(buf, "%2d", scratch_time.unit.day);
                 watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
                 sprintf(buf, "%2d%02d%2s", scratch_time.unit.hour, scratch_time.unit.minute,longLatPresets[state->longLatToUse].name);
@@ -183,7 +183,7 @@ static void _sunrise_sunset_face_update(sunrise_sunset_state_t *state) {
                     if (watch_utility_convert_to_12_hour(&scratch_time)) watch_set_indicator(WATCH_INDICATOR_PM);
                     else watch_clear_indicator(WATCH_INDICATOR_PM);
                 }
-                watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "SET", "SE");
+                watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "SET", "UN");
                 sprintf(buf, "%2d", scratch_time.unit.day);
                 watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
                 sprintf(buf, "%2d%02d%2s", scratch_time.unit.hour, scratch_time.unit.minute,longLatPresets[state->longLatToUse].name);
