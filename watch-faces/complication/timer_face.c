@@ -28,7 +28,7 @@
 #include "watch.h"
 #include "watch_utility.h"
 
-static const uint32_t _default_timer_values[] = {0x000300, 0x000500, 0x000A00, 0x000F00, 0x001E00, 0x000001}; // default timers
+static const uint32_t _default_timer_values[] = {0x0, 0x000300, 0x000500, 0x000A00, 0x000F00, 0x001E00, 0x000001}; // default timers
 
 static int8_t _wait_ticks = -1;
 
@@ -112,7 +112,7 @@ static void _draw(timer_state_t *state, uint8_t subsecond) {
             break;
     }
 
-    sprintf(timer_id, "%2u", state->current_timer + 1);
+    sprintf(timer_id, "%2u", state->current_timer);
     if (state->mode == setting && subsecond % 2) {
         // blink the current settings value
         //if (state->settings_state == 0) timer_id[0] = timer_id[1] = ' ';
@@ -120,7 +120,12 @@ static void _draw(timer_state_t *state, uint8_t subsecond) {
         else bottom_time[(state->settings_state + 2 - 1) * 2 - 2] = bottom_time[(state->settings_state + 2 - 1) * 2 - 1] = ' ';
     }
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, bottom_time, bottom_time);
-    watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, timer_id, timer_id);
+
+    if (timer_id == 0) {     
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "ON", "ON"); //first timer is special
+    } else {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, timer_id, timer_id);
+    }
 
     // set lap indicator when we have a looping timer
     if (state->timers[state->current_timer].unit.repeat) watch_set_indicator(WATCH_INDICATOR_LAP);
@@ -226,9 +231,12 @@ bool timer_face_loop(movement_event_t event, void *context) {
 
     switch (event.event_type) {
         case EVENT_ACTIVATE:
-            // if(state->mode == waiting ) {
-            //     state->current_timer = 0;
-            // }
+             if(state->mode == waiting ) {
+                //when activating, reset first timer and show it
+                 state->current_timer = 0;
+                 state->timers[state->current_timer].unit.hours = 0;
+                 state->timers[state->current_timer].unit.minutes = 0;
+             }
 
             _draw(state, event.subsecond);
             break;
@@ -266,15 +274,27 @@ bool timer_face_loop(movement_event_t event, void *context) {
                     // initiate settings
                     state->mode = setting;
                     state->settings_state = 0;
+                    if (state->current_timer == 0) { 
+                        //reset first timer when entering settings
+                        state->timers[state->current_timer].unit.hours = 0;
+                        state->timers[state->current_timer].unit.minutes = 0;
+                    }
                     movement_request_tick_frequency(4);
                     break;
                 case setting:
                     state->settings_state = (state->settings_state + 1) % 3;
+
+                    if(state->current_timer == 0) state->settings_state = 0; //no clear for first timer
+
                     if (state->settings_state == 2 && state->timers[state->current_timer].value == 0) state->settings_state = 0;
                     //else if (state->settings_state == 5 && (state->timers[state->current_timer].value & 0xFFFFFF) == 0) state->settings_state = 0;
                     
                     if(state->settings_state == 0) {
                         _resume_setting(state); //exit settings after last setting
+
+                        if (state->current_timer == 0 && state->timers[state->current_timer].value != 0) {
+                            _start(state, true); //start first timer immediately after setting
+                        }
                     }
                     
                     break;
