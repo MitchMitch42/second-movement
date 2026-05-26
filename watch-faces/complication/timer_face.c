@@ -121,8 +121,8 @@ static void _draw(timer_state_t *state, uint8_t subsecond) {
     }
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, bottom_time, bottom_time);
 
-    if (timer_id == 0) {     
-        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "ON", "ON"); //first timer is special
+    if (state->current_timer == 0) {     
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "On", "On"); //first timer is special
     } else {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, timer_id, timer_id);
     }
@@ -233,9 +233,10 @@ bool timer_face_loop(movement_event_t event, void *context) {
         case EVENT_ACTIVATE:
              if(state->mode == waiting ) {
                 //when activating, reset first timer and show it
-                 state->current_timer = 0;
-                 state->timers[state->current_timer].unit.hours = 0;
-                 state->timers[state->current_timer].unit.minutes = 0;
+                state->current_timer = 0;
+                state->timers[state->current_timer].unit.hours = 0;
+                state->timers[state->current_timer].unit.minutes = 0;
+                state->timers[state->current_timer].unit.seconds = 0;
              }
 
             _draw(state, event.subsecond);
@@ -278,13 +279,12 @@ bool timer_face_loop(movement_event_t event, void *context) {
                         //reset first timer when entering settings
                         state->timers[state->current_timer].unit.hours = 0;
                         state->timers[state->current_timer].unit.minutes = 0;
+                        state->timers[state->current_timer].unit.seconds = 0;
                     }
                     movement_request_tick_frequency(4);
                     break;
                 case setting:
                     state->settings_state = (state->settings_state + 1) % 3;
-
-                    if(state->current_timer == 0) state->settings_state = 0; //no clear for first timer
 
                     if (state->settings_state == 2 && state->timers[state->current_timer].value == 0) state->settings_state = 0;
                     //else if (state->settings_state == 5 && (state->timers[state->current_timer].value & 0xFFFFFF) == 0) state->settings_state = 0;
