@@ -480,13 +480,12 @@ void movement_force_led_on(uint8_t red, uint8_t green, uint8_t blue) {
 }
 
 void movement_force_led_off(void) {
-    if(!movement_state.led_is_permanently_on) {
-        movement_state.light_on = false;
-        // The led timeout probably already triggered, but still disable just in case we are switching off the light by other means
-        watch_rtc_disable_comp_callback_no_schedule(LED_TIMEOUT);
-        movement_volatile_state.schedule_next_comp = true;
-        watch_set_led_off();
-    }
+    if(movement_state.led_is_permanently_on) return; // if the light is permanently on, we don't want to turn it off until the user explicitly requests it
+    movement_state.light_on = false;
+    // The led timeout probably already triggered, but still disable just in case we are switching off the light by other means
+    watch_rtc_disable_comp_callback_no_schedule(LED_TIMEOUT);
+    movement_volatile_state.schedule_next_comp = true;
+    watch_set_led_off();
 }
 
 bool movement_default_loop_handler(movement_event_t event) {
