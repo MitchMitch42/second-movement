@@ -59,4 +59,6 @@ SRCS += \
   ./watch-faces/clock/solar_time_face.c \
   ./watch-faces/complication/tide_face.c \
   ./watch-faces/sensor/blink_receiver_face.c \
+  ./watch-faces/complication/tamagotchi_face.c \
+  ./watch-faces/sensor/temperature_correction_face.c \ 
 # New watch faces go above this line.
