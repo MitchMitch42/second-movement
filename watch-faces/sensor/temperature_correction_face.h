@@ -59,6 +59,7 @@ typedef struct {
     uint32_t last_second;                                             // last RTC second used for timed sampling
     temperature_correction_mode_t mode;                               // current mode (waiting, running, setting)
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
+    uint8_t tick_show_real_temperature;                               // if > 0: show the real temperature the next few ticks
 } temperature_correction_state_t;
 
 void temperature_correction_face_setup(uint8_t watch_face_index, void ** context_ptr);
