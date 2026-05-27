@@ -41,7 +41,8 @@ static uint8_t _beeps_to_play;    // temporary counter for ring signals playing
 static void _signal_callback() {
     if (_beeps_to_play) {
         _beeps_to_play--;
-        watch_buzzer_play_sequence((int8_t *)_sound_seq_beep, _signal_callback);
+        //watch_buzzer_play_sequence((int8_t *)_sound_seq_beep, _signal_callback);
+        watch_buzzer_play_sequence((int8_t *)(movement_get_alarm_tune()), _signal_callback);
     }
 }
 
@@ -349,7 +350,8 @@ bool timer_face_loop(movement_event_t event, void *context) {
         case EVENT_BACKGROUND_TASK:
             // play the alarm
             _beeps_to_play = 4;
-            watch_buzzer_play_sequence((int8_t *)_sound_seq_beep, _signal_callback);
+            //watch_buzzer_play_sequence((int8_t *)_sound_seq_beep, _signal_callback);
+            watch_buzzer_play_sequence((int8_t *)(movement_get_alarm_tune()), _signal_callback);
             _reset(state);
             if (state->timers[state->current_timer].unit.repeat) _start(state, false);
             break;

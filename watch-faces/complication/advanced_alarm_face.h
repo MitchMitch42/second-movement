@@ -47,7 +47,7 @@
  *        - WN = the alarm fires on weekends (Sa/Su)
  *        - MO to SU = the alarm fires only on the given day of week
  *    - You can fast cycle through hour or minute setting via long press of the alarm button.
- *    - You can select the tone in which the alarm is played. (Three pitch levels available.)
+ *    - You can select the pitch in which the alarm is played.
  *    - You can select how many "beep rounds" are played for each alarm. 1 to 9 rounds, plus extra 
  *      long ('L') and extra short ('o') alarms.
  *    - The simple watch face indicates if any alarm is set within the next 24h by showing the signal

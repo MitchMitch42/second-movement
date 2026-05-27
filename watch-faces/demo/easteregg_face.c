@@ -26,6 +26,7 @@
 #include <string.h>
 #include "easteregg_face.h"
 #include "watch.h"
+#include "movement_custom_signal_tunes.h"
 
 uint8_t red= 0;
 uint8_t green= 0;
@@ -120,7 +121,7 @@ bool easteregg_face_loop(movement_event_t event, void *context) {
             break;
 
         case EVENT_ALARM_BUTTON_DOWN:
-            //watch_buzzer_play_sequence(movement_get_melody(8), NULL);
+            movement_play_sequence(tunes_table[52], BUZZER_PRIORITY_ALARM);
             break;
         
         default:
