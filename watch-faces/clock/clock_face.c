@@ -39,7 +39,7 @@
 // 2.4 volts seems to offer adequate warning of a low battery condition?
 // refined based on user reports and personal observations; may need further adjustment.
 #ifndef CLOCK_FACE_LOW_BATTERY_VOLTAGE_THRESHOLD
-#define CLOCK_FACE_LOW_BATTERY_VOLTAGE_THRESHOLD 2400
+#define CLOCK_FACE_LOW_BATTERY_VOLTAGE_THRESHOLD 2700
 #endif
 
 static void clock_indicate(watch_indicator_t indicator, bool on) {
