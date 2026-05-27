@@ -80,11 +80,11 @@ static void _update(moon_phase_state_t *state) {
     switch (phase_index) {
         case 0:
         case 8:
-            watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "NE!J  ", " Neu  ");
+            //watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "NE!J  ", " Neu  ");
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "   ", "  ");
             break;
         case 1:
-            watch_display_text(WATCH_POSITION_BOTTOM, "CresNt");
+            //watch_display_text(WATCH_POSITION_BOTTOM, "CresNt");
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WAX", "  ");
             if (watch_get_lcd_type() == WATCH_LCD_TYPE_CLASSIC) {
                 if (!southern) {
@@ -99,7 +99,7 @@ static void _update(moon_phase_state_t *state) {
             }
             break;
         case 2:
-            watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, southern ? "3rdQtr" : "1stQtr", southern ? " 3rd q" : " 1st q");
+            //watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "1stQtr", " 1st q");
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WAX", "  ");
             if (watch_get_lcd_type() == WATCH_LCD_TYPE_CLASSIC) {
                 if (!southern) {
@@ -116,7 +116,7 @@ static void _update(moon_phase_state_t *state) {
             }
             break;
         case 3:
-            watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "GbboUs", " Gibb ");
+            //watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "GbboUs", " Gibb ");
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WAX", "  ");
             if (watch_get_lcd_type() == WATCH_LCD_TYPE_CLASSIC) {
                 if (!southern) {
@@ -135,7 +135,7 @@ static void _update(moon_phase_state_t *state) {
             }
             break;
         case 4:
-            watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
+            //watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "   ", "  ");
             if (watch_get_lcd_type() == WATCH_LCD_TYPE_CLASSIC) {
                 watch_set_pixel(2, 13);
@@ -149,7 +149,7 @@ static void _update(moon_phase_state_t *state) {
             }
             break;
         case 5:
-            watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "GbboUs", " Gibb ");
+            //watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "GbboUs", " Gibb ");
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WAN", "  ");
             if (watch_get_lcd_type() == WATCH_LCD_TYPE_CLASSIC) {
                 if (!southern) {
@@ -168,7 +168,7 @@ static void _update(moon_phase_state_t *state) {
             }
             break;
         case 6:
-            watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, southern ? "1stQtr" : "3rdQtr", southern ? " 1st q" : " 3rd q");
+            //watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "3rdQtr", " 3rd q");
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WAN", "  ");
             if (watch_get_lcd_type() == WATCH_LCD_TYPE_CLASSIC) {
                 if (!southern) {
@@ -185,7 +185,7 @@ static void _update(moon_phase_state_t *state) {
             }
             break;
         case 7:
-            watch_display_text(WATCH_POSITION_BOTTOM, "CresNt");
+            //watch_display_text(WATCH_POSITION_BOTTOM, "CresNt");
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WAN", "  ");
             if (watch_get_lcd_type() == WATCH_LCD_TYPE_CLASSIC) {
                 if (!southern) {
@@ -200,6 +200,19 @@ static void _update(moon_phase_state_t *state) {
             }
             break;
     }
+    
+    int percent;
+    if (currentfrac <= 0.5) {
+        percent = (int)((200.0 * currentfrac) + 0.5);
+    } else {
+        percent = (int)((200.0 * (1.0 - currentfrac)) + 0.5);
+    }
+
+    watch_display_text(WATCH_POSITION_BOTTOM, percent == 100 ?  " FUL" : ((percent == 0 ? " NEU" : (currentfrac < 0.5 ? "2U  " : "abn "))));
+    
+    sprintf(buf, "%2d", percent == 100 ? 99 : percent);
+    watch_display_text(WATCH_POSITION_SECONDS, buf);
+    
 }
 
 bool moon_phase_face_loop(movement_event_t event, void *context) {
