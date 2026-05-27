@@ -43,7 +43,6 @@ typedef enum {
 } temperature_correction_mode_t;
 
 typedef struct {
-    float *data;
     int head_index;
     int length;
     int max;

@@ -27,6 +27,11 @@
 #include <math.h>
 #include "temperature_correction_face.h"
 
+// Default initial values for the temperature correction face
+#define TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT 0.0013240584F
+#define TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE 20
+#define TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT 5
+
 static bool skip = false;
 
 //int debug_index = -1;
@@ -184,7 +189,7 @@ static void temperature_correction_face_advance_settings(temperature_correction_
             if(forward && digit < 9) coeff = coeff + pow(10, abs((int)state->settings_state - 7));
             else if(!forward && digit > 0) coeff = coeff - pow(10, abs((int)state->settings_state - 7));
             state->coefficient = ((float)coeff) / 100000;
-            if(state->coefficient > 9) state->coefficient = 0.0013240584F;
+            if(state->coefficient > 9) state->coefficient = TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT;
         default:
             break;
     }
@@ -204,9 +209,9 @@ void temperature_correction_face_setup(uint8_t watch_face_index, void ** context
         state->buffer.data = malloc(TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX * sizeof(float));
         state->calculated_temperatures.data = malloc(TEMPERATURE_CORRECTION_AVERAGING_MAX * sizeof(float));
         
-        state->coefficient = 0.0013240584F;
-        state->buffer_size = 20;
-        state->average_count = 5;
+        state->coefficient = TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT;
+        state->buffer_size = TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE;
+        state->average_count = TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT;
     }
 }
 
