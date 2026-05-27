@@ -43,22 +43,22 @@ typedef enum {
 } temperature_correction_mode_t;
 
 typedef struct {
-    float *data;
-    int head_index;
-    int length;
-    int max;
+    float *data;             // the data points
+    int head_index;          // index of the most recent entry (-1 when empty)
+    int length;              // current number of valid entries in the buffer
+    int max;                 // maximum capacity of the buffer
 } temperature_correction_rolling_buffer_t;
 
 typedef struct {
-    temperature_correction_rolling_buffer_t buffer;
-    temperature_correction_rolling_buffer_t calculated_temperatures;
-    float coefficient;
-    int buffer_size;
-    int average_count;
-    bool bell_shown;
-    uint32_t last_second;
-    temperature_correction_mode_t mode;
-    uint8_t settings_state;
+    temperature_correction_rolling_buffer_t buffer;                 // rolling buffer holding recent raw temperature samples
+    temperature_correction_rolling_buffer_t calculated_temperatures; // rolling buffer holding corrected temperatures
+    float coefficient;                                              // heat transfer coefficient used for correction
+    int buffer_size;                                                 // configured number of samples to retain in `buffer`
+    int average_count;                                               // number of corrected values to average for display   
+    bool bell_shown;                                                  // whether the bell indicator is currently shown
+    uint32_t last_second;                                             // last RTC second used for timed sampling
+    temperature_correction_mode_t mode;                               // current mode (waiting, running, setting)
+    uint8_t settings_state;                                           // selected sub-setting index when in settings mode
 } temperature_correction_state_t;
 
 void temperature_correction_face_setup(uint8_t watch_face_index, void ** context_ptr);

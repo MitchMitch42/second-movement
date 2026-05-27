@@ -27,21 +27,21 @@
 #include <math.h>
 #include "temperature_correction_face.h"
 
+// Default initial values for the temperature correction face
+#define TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT 0.0013240584F
+#define TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE 20
+#define TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT 5
+
 static bool skip = false;
 
 //int debug_index = -1;
 //float debug_data[] = {31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
 //float debug_data[] = { 15.7, 15.6, 15.6, 15.6, 15.6, 15.6, 15.5, 15.5, 15.5, 15.5, 15.5, 15.4, 15.4, 15.4, 15.4, 15.3, 15.3, 15.3, 15.3, 15.2, 15.2, 15.2, 15.2, 15.2, 15.1, 15.1, 15.1, 15.1, 15.1, 15.0, 15.0, 15.0, 15.0, 14.9, 14.9, 14.9, 14.9, 14.9, 14.8, 14.8, 14.8, 14.8, 14.8, 14.7, 14.7, 14.7, 14.7, 14.7, 14.6, 14.6, 14.6, 14.6, 14.5, 14.5 };
 
-// reset a rolling buffer
-static void temperature_correction_face_init_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, int usable_length) {
-    buffer->head_index = -1;
-    buffer->length = 0;
-    buffer->max = usable_length;
-}
-
-// add a value to a rolling buffer
-static void temperature_correction_add_to_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, float value) {
+/// @brief add a value to a rolling buffer
+/// @param buffer rolling buffer to update
+/// @param value temperature sample to append
+static void temperature_correction_face_add_to_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, float value) {
     buffer->head_index = (buffer->head_index + 1) % buffer->max;
     buffer->length = buffer->length + 1 < buffer->max ? buffer->length + 1 : buffer->max;
     buffer->data[buffer->head_index] = value;
@@ -52,13 +52,15 @@ static void temperature_correction_add_to_rolling_buffer(temperature_correction_
 /// @param temperature_current currently measured temperature
 /// @param temperature_start start temperature 
 /// @param coefficient heat transfer coefficient
-/// @return 
+/// @return corrected end temperature after applying the cooling model
 static float temperature_correction_face_calculate_end_temperature_raw(int delta, float temperature_current, float temperature_start, float coefficient) {
     float ex =  expf(-coefficient * (float)delta);
     return (temperature_current - temperature_start * ex) / (1 - ex);
 }
 
-// calculate end temperature using given rolling buffer and given coefficient
+/// @brief calculate end temperature using given rolling buffer and given coefficient
+/// @param state face state containing temperature history and coefficient
+/// @return corrected end temperature based on buffered data
 static float temperature_correction_face_calculate_end_temperature(temperature_correction_state_t *state) {
     float temperature_current = state->buffer.data[state->buffer.head_index];
     int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
@@ -66,13 +68,17 @@ static float temperature_correction_face_calculate_end_temperature(temperature_c
     return temperature_correction_face_calculate_end_temperature_raw(state->buffer.length - 1, temperature_current, temperature_start, state->coefficient);
 }
 
-// display a temperature
+/// @brief display a temperature
+/// @param temperature_c temperature in Celsius
+/// @param in_fahrenheit true to display in Fahrenheit, false to display Celsius
 static void temperature_correction_face_show_temperature(float temperature_c, bool in_fahrenheit) {
     if (in_fahrenheit) watch_display_float_with_best_effort(temperature_c * 1.8 + 32.0, "#F");
     else watch_display_float_with_best_effort(temperature_c, "#C");
 }
 
-// calculate average value of the last n calculated temperatures
+/// @brief calculate average value of the last n calculated temperatures
+/// @param state face state containing corrected temperature history
+/// @return average corrected temperature
 static float temperature_correction_face_calculate_average(temperature_correction_state_t *state) {
     float sum = 0;
     for (int i = 0; i < state->calculated_temperatures.length; i++)
@@ -80,27 +86,42 @@ static float temperature_correction_face_calculate_average(temperature_correctio
     return sum / state->calculated_temperatures.length;
 }
 
+/// @brief calculate corrected temperature and display it
+/// @param state face state used to compute and display the temperature
 static void temperature_correction_face_calculate_temperature_and_display(temperature_correction_state_t *state) {
     if (state->buffer.length > 1) {
-        temperature_correction_add_to_rolling_buffer(&state->calculated_temperatures, temperature_correction_face_calculate_end_temperature(state));
-        temperature_correction_face_show_temperature(temperature_correction_face_calculate_average(state), movement_use_imperial_units());
+        float end_temperature = temperature_correction_face_calculate_end_temperature(state);
+        temperature_correction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
+        float average_temperature = temperature_correction_face_calculate_average(state);
+        temperature_correction_face_show_temperature(average_temperature, movement_use_imperial_units());
     }
 }
 
+/// @brief log the current temperature into the sample buffer
+/// @param state face state containing the buffer to append into
 static void temperature_correction_face_log_data(temperature_correction_state_t *state) {
-    temperature_correction_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
-    
-  //  state->buffer.data[state->buffer.head_index] = debug_data[debug_index];
-  //  debug_index = (debug_index + 1) % (sizeof(debug_data)/sizeof(debug_data[0]));
+    temperature_correction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
 }
 
+/// @brief reset a rolling buffer
+/// @param buffer rolling buffer to initialize
+/// @param usable_length maximum number of entries the buffer can hold
+static void temperature_correction_face_init_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, int usable_length) {
+    buffer->head_index = -1;
+    buffer->length = 0;
+    buffer->max = usable_length;
+}
+
+/// @brief initialize the main temperature buffers before logging
+/// @param state face state containing buffer size and averaging count
 static void temperature_correction_face_init_rolling_buffers(temperature_correction_state_t *state) {
     temperature_correction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
     temperature_correction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
-    
-  //  debug_index = 0;
 }
 
+/// @brief display current settings on the watch face
+/// @param state face state containing settings values
+/// @param subsecond current subsecond value used for blink timing
 static void temperature_correction_face_display_settings(temperature_correction_state_t *state, uint8_t subsecond) {
     char buf[8];
     int coeff;
@@ -139,6 +160,9 @@ static void temperature_correction_face_display_settings(temperature_correction_
     }
 }
 
+/// @brief advance the active setting value up or down
+/// @param state face state containing the selected setting
+/// @param forward true to increment, false to decrement
 static void temperature_correction_face_advance_settings(temperature_correction_state_t *state, bool forward) {
     int coeff;
     float decim;
@@ -165,7 +189,7 @@ static void temperature_correction_face_advance_settings(temperature_correction_
             if(forward && digit < 9) coeff = coeff + pow(10, abs((int)state->settings_state - 7));
             else if(!forward && digit > 0) coeff = coeff - pow(10, abs((int)state->settings_state - 7));
             state->coefficient = ((float)coeff) / 100000;
-            if(state->coefficient > 9) state->coefficient = 0.0013240584F;
+            if(state->coefficient > 9) state->coefficient = TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT;
         default:
             break;
     }
@@ -185,9 +209,9 @@ void temperature_correction_face_setup(uint8_t watch_face_index, void ** context
         state->buffer.data = malloc(TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX * sizeof(float));
         state->calculated_temperatures.data = malloc(TEMPERATURE_CORRECTION_AVERAGING_MAX * sizeof(float));
         
-        state->coefficient = 0.0013240584F;
-        state->buffer_size = 20;
-        state->average_count = 5;
+        state->coefficient = TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT;
+        state->buffer_size = TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE;
+        state->average_count = TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT;
     }
 }
 
