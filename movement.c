@@ -436,15 +436,21 @@ void movement_illuminate_led(void) {
         watch_set_led_color_rgb(movement_state.settings.bit.led_red_color | movement_state.settings.bit.led_red_color << 4,
                                 movement_state.settings.bit.led_green_color | movement_state.settings.bit.led_green_color << 4,
                                 movement_state.settings.bit.led_blue_color | movement_state.settings.bit.led_blue_color << 4);
-        if (movement_state.settings.bit.led_duration == 0) {
-            // Do nothing it'll be turned off on button release
-        } else {
+       
+        uint32_t timeout_seconds = 0;
+        if (movement_state.led_is_permanently_on) {
+            timeout_seconds = 120; // 2 minutes timeout
+        } else if (movement_state.settings.bit.led_duration != 0) { // Do nothing for led_duration==0, it'll be turned off on button release
+            timeout_seconds = movement_state.settings.bit.led_duration * 2 - 1;
+        }    
+
+        if (timeout_seconds > 0) {
             // Set a timeout to turn off the light
             rtc_counter_t counter = watch_rtc_get_counter();
             uint32_t freq = watch_rtc_get_frequency();
             watch_rtc_register_comp_callback_no_schedule(
                 cb_led_timeout_interrupt,
-                counter + (movement_state.settings.bit.led_duration * 2 - 1) * freq,
+                counter + timeout_seconds * freq,
                 LED_TIMEOUT
             );
             movement_volatile_state.schedule_next_comp = true;
@@ -462,6 +468,7 @@ void movement_force_led_on(uint8_t red, uint8_t green, uint8_t blue) {
 }
 
 void movement_force_led_off(void) {
+    if(movement_state.led_is_permanently_on) return; // if the light is permanently on, we don't want to turn it off until the user explicitly requests it
     movement_state.light_on = false;
     // The led timeout probably already triggered, but still disable just in case we are switching off the light by other means
     watch_rtc_disable_comp_callback_no_schedule(LED_TIMEOUT);
@@ -475,13 +482,26 @@ bool movement_default_loop_handler(movement_event_t event) {
             movement_move_to_next_face();
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
-            movement_illuminate_led();
+            if (movement_state.led_is_permanently_on) {
+                if(movement_state.current_face_idx == 0) {
+                    movement_state.led_is_permanently_on = false;
+                    movement_force_led_off();
+                }
+            } else {
+                movement_illuminate_led();
+            }
             break;
         case EVENT_LIGHT_BUTTON_UP:
         case EVENT_LIGHT_LONG_UP:
             if (movement_state.settings.bit.led_duration == 0) {
                 movement_force_led_off();
             }
+            break;
+        case EVENT_LIGHT_LONG_PRESS:
+            if (!movement_state.led_is_permanently_on && movement_state.current_face_idx == 0) {
+                movement_state.led_is_permanently_on = true;
+                movement_illuminate_led();
+            } 
             break;
         case EVENT_MODE_LONG_PRESS:
             if (MOVEMENT_SECONDARY_FACE_INDEX && movement_state.current_face_idx == 0) {
@@ -729,6 +749,15 @@ void movement_set_utc_date_time(watch_date_time_t date_time) {
 void movement_set_local_date_time(watch_date_time_t date_time) {
     int32_t current_offset = movement_get_current_timezone_offset();
     movement_set_utc_timestamp(watch_utility_date_time_to_unix_time(date_time, current_offset));
+}
+
+void movement_set_local_date_time_exact(watch_date_time_t date_time, uint16_t ms) {
+    if (ms > 0) {
+        watch_rtc_enable(false);   
+        delay_ms(ms); // delay clock
+        watch_rtc_enable(true);
+    }
+    movement_set_local_date_time(date_time);
 }
 
 void movement_set_utc_timestamp(uint32_t timestamp) {
@@ -1519,6 +1548,7 @@ void cb_alarm_btn_timeout_interrupt(void) {
 }
 
 void cb_led_timeout_interrupt(void) {
+    movement_state.led_is_permanently_on = false;
     movement_volatile_state.turn_led_off = true;
 }
 
