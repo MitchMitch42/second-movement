@@ -276,6 +276,7 @@ typedef struct {
 
     // LED stuff
     bool light_on;
+    bool led_is_permanently_on;
 
     // background task handling
     bool has_scheduled_background_task;
