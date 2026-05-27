@@ -256,7 +256,8 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     state->mode = temperature_correction_setting;
                     state->settings_state = 0;
                     temperature_correction_face_display_settings(state, event.subsecond);
-                    break;
+                    break;      
+                case temperature_correction_coefficient:
                 case temperature_correction_running: 
                     temperature_correction_face_show_temperature(movement_get_temperature(), movement_use_imperial_units());
                     watch_set_indicator(WATCH_INDICATOR_LAP);
@@ -291,6 +292,31 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                 case temperature_correction_setting: 
                     temperature_correction_face_display_settings(state, event.subsecond);
                     break;
+                case temperature_correction_coefficient:
+                     if (watch_rtc_get_date_time().unit.second != state->last_second) { 
+                        state->last_second = watch_rtc_get_date_time().unit.second;                          
+                        state->bell_shown = !state->bell_shown;
+                        if(state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
+                        else watch_clear_indicator(WATCH_INDICATOR_BELL);              
+                        
+                        state->delta++;
+                        float temperature_current = movement_get_temperature();
+                        float temperature_end = state->temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
+                        float coeff_f= temperature_correction_face_calculate_coefficient(state->delta, state->temperature_start, temperature_current, temperature_end);
+                    
+                        if (state->tick_show_real_temperature == 0) {
+                            char buf[8];
+                            int coeff;
+                            coeff = (int)(coeff_f * 100000 + 0.5); // 0.0013240584 -> 000132
+                            //watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
+                            sprintf(buf, "%06d", coeff); 
+                            watch_display_text(WATCH_POSITION_BOTTOM, buf);
+                        }
+
+                        if (state->tick_show_real_temperature == 0) watch_clear_indicator(WATCH_INDICATOR_LAP);
+                        else state->tick_show_real_temperature--;
+                    }
+                    break;
             }
             break;
         case EVENT_ALARM_BUTTON_UP: 
@@ -301,6 +327,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     temperature_correction_face_init_rolling_buffers(state);
                     state->mode = temperature_correction_running;
                     break;
+                case temperature_correction_coefficient:
                 case temperature_correction_running: // stop logging
                     watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
                     watch_clear_indicator(WATCH_INDICATOR_BELL); 
@@ -316,6 +343,11 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
         case EVENT_ALARM_LONG_PRESS:
             switch (state->mode) {
                 case temperature_correction_waiting: 
+                    // start coefficient calculation
+                    state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
+                    watch_set_indicator(WATCH_INDICATOR_SIGNAL);
+                    state->temperature_start = movement_get_temperature();
+                    state->mode = temperature_correction_coefficient;
                     break;
                 case temperature_correction_running: 
                     break;
@@ -323,6 +355,8 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     temperature_correction_face_advance_settings(state, false);
                     temperature_correction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
                     break;
+                case temperature_correction_coefficient:
+                     break;
             }
             break;
         case EVENT_TIMEOUT:
