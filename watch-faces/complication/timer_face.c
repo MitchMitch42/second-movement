@@ -123,7 +123,7 @@ static void _draw(timer_state_t *state, uint8_t subsecond) {
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, bottom_time, bottom_time);
 
     if (state->current_timer == 0) {     
-        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "On", "On"); //first timer is special
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "-0", "-0"); //first timer is special
     } else {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, timer_id, timer_id);
     }
