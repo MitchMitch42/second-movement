@@ -33,19 +33,10 @@ static bool skip = false;
 //float debug_data[] = {31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
 //float debug_data[] = { 15.7, 15.6, 15.6, 15.6, 15.6, 15.6, 15.5, 15.5, 15.5, 15.5, 15.5, 15.4, 15.4, 15.4, 15.4, 15.3, 15.3, 15.3, 15.3, 15.2, 15.2, 15.2, 15.2, 15.2, 15.1, 15.1, 15.1, 15.1, 15.1, 15.0, 15.0, 15.0, 15.0, 14.9, 14.9, 14.9, 14.9, 14.9, 14.8, 14.8, 14.8, 14.8, 14.8, 14.7, 14.7, 14.7, 14.7, 14.7, 14.6, 14.6, 14.6, 14.6, 14.5, 14.5 };
 
-/// @brief reset a rolling buffer
-/// @param buffer rolling buffer to initialize
-/// @param usable_length maximum number of entries the buffer can hold
-static void temperature_correction_face_init_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, int usable_length) {
-    buffer->head_index = -1;
-    buffer->length = 0;
-    buffer->max = usable_length;
-}
-
 /// @brief add a value to a rolling buffer
 /// @param buffer rolling buffer to update
 /// @param value temperature sample to append
-static void temperature_correction_add_to_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, float value) {
+static void temperature_correction_face_add_to_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, float value) {
     buffer->head_index = (buffer->head_index + 1) % buffer->max;
     buffer->length = buffer->length + 1 < buffer->max ? buffer->length + 1 : buffer->max;
     buffer->data[buffer->head_index] = value;
@@ -94,18 +85,26 @@ static float temperature_correction_face_calculate_average(temperature_correctio
 /// @param state face state used to compute and display the temperature
 static void temperature_correction_face_calculate_temperature_and_display(temperature_correction_state_t *state) {
     if (state->buffer.length > 1) {
-        temperature_correction_add_to_rolling_buffer(&state->calculated_temperatures, temperature_correction_face_calculate_end_temperature(state));
-        temperature_correction_face_show_temperature(temperature_correction_face_calculate_average(state), movement_use_imperial_units());
+        float end_temperature = temperature_correction_face_calculate_end_temperature(state);
+        temperature_correction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
+        float average_temperature = temperature_correction_face_calculate_average(state);
+        temperature_correction_face_show_temperature(average_temperature, movement_use_imperial_units());
     }
 }
 
 /// @brief log the current temperature into the sample buffer
 /// @param state face state containing the buffer to append into
 static void temperature_correction_face_log_data(temperature_correction_state_t *state) {
-    temperature_correction_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
-    
-  //  state->buffer.data[state->buffer.head_index] = debug_data[debug_index];
-  //  debug_index = (debug_index + 1) % (sizeof(debug_data)/sizeof(debug_data[0]));
+    temperature_correction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
+}
+
+/// @brief reset a rolling buffer
+/// @param buffer rolling buffer to initialize
+/// @param usable_length maximum number of entries the buffer can hold
+static void temperature_correction_face_init_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, int usable_length) {
+    buffer->head_index = -1;
+    buffer->length = 0;
+    buffer->max = usable_length;
 }
 
 /// @brief initialize the main temperature buffers before logging
@@ -113,8 +112,6 @@ static void temperature_correction_face_log_data(temperature_correction_state_t 
 static void temperature_correction_face_init_rolling_buffers(temperature_correction_state_t *state) {
     temperature_correction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
     temperature_correction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
-    
-  //  debug_index = 0;
 }
 
 /// @brief display current settings on the watch face
