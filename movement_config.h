@@ -57,6 +57,7 @@ const watch_face_t watch_faces[] = {
  * If you don't want any faces to be excluded, set this to 0 and a long Mode press will have no effect.
  */
 #define MOVEMENT_SECONDARY_FACE_INDEX (MOVEMENT_NUM_FACES - 13)
+#define MOVEMENT_TERTIARY_FACE_INDEX (MOVEMENT_NUM_FACES - 6)
 
 /* Custom hourly chime tune. Check movement_custom_signal_tunes.h for options. */
 #define SIGNAL_TUNE_DEFAULT
