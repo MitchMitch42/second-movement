@@ -59,6 +59,17 @@ static float temperature_correction_face_calculate_end_temperature_raw(int delta
     return (temperature_current - temperature_start * ex) / (1 - ex);
 }
 
+/// @brief calculate heat transfer coefficient of Newton's law of cooling
+/// @param delta how many datapoints were logged between temperature_start and temperature_current
+/// @param temperature_start start temperature
+/// @param temperature_current currently measured temperature
+/// @param temperature_end end temperature (e.g. real ambient temperature) that the model should converge to
+/// @return heat transfer coefficient
+static float temperature_correction_face_calculate_coefficient(int delta, float temperature_start, float temperature_current, float temperature_end ) {
+    // =(1/G28)*LN((J28-I28)/(H28-I28))
+    return (1 / delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
+}
+
 /// @brief calculate end temperature using given rolling buffer and given coefficient
 /// @param state face state containing temperature history and coefficient
 /// @return corrected end temperature based on buffered data
