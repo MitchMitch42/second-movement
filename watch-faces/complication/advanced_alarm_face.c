@@ -270,7 +270,7 @@ void advanced_alarm_face_resign(void *context) {
     alarm_state_t *state = (alarm_state_t *)context;
     state->is_setting = false;
     _alarm_update_alarm_enabled(state);
-    watch_set_led_off();
+    //watch_set_led_off();
     state->alarm_quick_ticks = false;
     _wait_ticks = -1;
     movement_request_tick_frequency(1);
@@ -345,7 +345,7 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
         break;
     case EVENT_LIGHT_BUTTON_UP:
         if (!state->is_setting) {
-            movement_illuminate_led();
+            //movement_illuminate_led();
             _alarm_initiate_setting(state, event.subsecond);
             break;
         }
