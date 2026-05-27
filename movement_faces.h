@@ -86,4 +86,5 @@
 #include "blink_receiver_face.h"
 #include "tamagotchi_face.h"
 #include "temperature_correction_face.h"
+#include "easteregg_face.h"
 // New includes go above this line.
