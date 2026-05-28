@@ -67,7 +67,7 @@ static float temperature_correction_face_calculate_end_temperature_raw(int delta
 /// @return heat transfer coefficient
 static float temperature_correction_face_calculate_coefficient(int delta, float temperature_start, float temperature_current, float temperature_end ) {
     // =(1/G28)*LN((J28-I28)/(H28-I28))
-    return (1 / delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
+    return (1.0 / (float)delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
 }
 
 /// @brief calculate end temperature using given rolling buffer and given coefficient
@@ -88,14 +88,14 @@ static void temperature_correction_face_show_temperature(float temperature_c, bo
     else watch_display_float_with_best_effort(temperature_c, "#C");
 }
 
-/// @brief calculate average value of the last n calculated temperatures
-/// @param state face state containing corrected temperature history
-/// @return average corrected temperature
-static float temperature_correction_face_calculate_average(temperature_correction_state_t *state) {
+/// @brief calculate average value of the last n values in a rolling buffer
+/// @param buffer rolling buffer containing the values
+/// @return average value
+static float temperature_correction_face_calculate_average(temperature_correction_rolling_buffer_t *buffer) {
     float sum = 0;
-    for (int i = 0; i < state->calculated_temperatures.length; i++)
-        sum += state->calculated_temperatures.data[i];
-    return sum / state->calculated_temperatures.length;
+    for (int i = 0; i < buffer->length; i++)
+        sum += buffer->data[i];
+    return sum / buffer->length;
 }
 
 /// @brief calculate corrected temperature and display it
@@ -104,7 +104,7 @@ static void temperature_correction_face_calculate_temperature_and_display(temper
     if (state->buffer.length > 1) {
         float end_temperature = temperature_correction_face_calculate_end_temperature(state);
         temperature_correction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
-        float average_temperature = temperature_correction_face_calculate_average(state);
+        float average_temperature = temperature_correction_face_calculate_average(&state->calculated_temperatures);
         if(display) temperature_correction_face_show_temperature(average_temperature, movement_use_imperial_units());
     }
 }
@@ -303,7 +303,23 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         float temperature_current = movement_get_temperature();
                         float temperature_end = state->temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
                         float coeff_f= temperature_correction_face_calculate_coefficient(state->delta, state->temperature_start, temperature_current, temperature_end);
-                    
+
+                        if (state->last_second == 42) {//once a minute
+                            temperature_correction_face_add_to_rolling_buffer(&state->buffer, temperature_current);
+                            if (state->buffer.length == TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES) { //only after n minutes
+                                float average = temperature_correction_face_calculate_average(&state->buffer);
+                                if(abs(average - temperature_current) <= TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD) { //temperature is stable: stop calculation
+                                    state->coefficient = coeff_f; //save new coefficient
+                                    watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
+                                    watch_clear_indicator(WATCH_INDICATOR_BELL); 
+                                    state->bell_shown = false;
+                                    state->mode = temperature_correction_waiting;
+                                    state->tick_show_real_temperature = 0; //display coefficient
+                                }
+                            }
+                        }
+
+                        //display coefficient
                         if (state->tick_show_real_temperature == 0) {
                             char buf[8];
                             int coeff;
@@ -346,6 +362,10 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     // start coefficient calculation
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
+
+                    //in mode temperature_correction_coefficient: save the last n values of the last n minutes in buffer (one sample per minute) to calc average temp of the last n minutes (n=TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES)
+                    temperature_correction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES);
+                    
                     state->temperature_start = movement_get_temperature();
                     state->mode = temperature_correction_coefficient;
                     break;
