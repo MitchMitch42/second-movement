@@ -243,9 +243,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
             }
             watch_display_text_with_fallback(WATCH_POSITION_TOP, "TCO", "TC");
             if(state->mode == temperature_correction_setting) { 
-                watch_set_indicator(WATCH_INDICATOR_SIGNAL);
-            } else {
-                watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
+                state->mode = temperature_correction_waiting;
             }
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
@@ -257,8 +255,8 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     state->settings_state = 0;
                     temperature_correction_face_display_settings(state, event.subsecond);
                     break;      
-                case temperature_correction_coefficient:
-                case temperature_correction_running: 
+                case temperature_correction_coefficient: //fallthrough
+                case temperature_correction_running: //show real temp for a few seconds
                     temperature_correction_face_show_temperature(movement_get_temperature(), movement_use_imperial_units());
                     watch_set_indicator(WATCH_INDICATOR_LAP);
                     state->tick_show_real_temperature = 2;
