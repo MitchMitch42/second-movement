@@ -71,6 +71,7 @@ typedef struct {
     uint8_t last_second;
     bool bell_shown;
     bool is_logging;
+    int8_t ts_ticks;
     thermistor_logger_data_point_t data[TEMPERATURE_LOGGING_NUM_DATA_POINTS];
 } temperature_logging_state_t;
 
