@@ -136,19 +136,21 @@ bool temperature_logging_face_loop(movement_event_t event, void *context) {
             _temperature_logging_face_update_display(logger_state, movement_use_imperial_units(), movement_clock_mode_24h());
             break;
         case EVENT_TICK:
-            bool temp_changed= false;
+            logger_state->temp_changed = false;
             if (logger_state->is_logging && watch_rtc_get_date_time().unit.second != logger_state->last_second) { 
                 logger_state->last_second = watch_rtc_get_date_time().unit.second;                          
                 logger_state->bell_shown = !state->bell_shown;
+                if (logger_state->data_points >= TEMPERATURE_LOGGING_NUM_DATA_POINTS)
+                    logger_state->bell_shown = false;
                 if(logger_state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
                 else watch_clear_indicator(WATCH_INDICATOR_BELL); 
-                temp_changed= _temperature_logging_face_log_data(logger_state);
+                logger_state->temp_changed = _temperature_logging_face_log_data(logger_state);
                 logger_state->delta_seconds++;
             }
 
             if (logger_state->ts_ticks && --logger_state->ts_ticks == 0) {
                 _temperature_logging_face_update_display(logger_state, movement_use_imperial_units(), movement_clock_mode_24h());
-            } else if (temp_changed) {
+            } else if (logger_state->temp_changed) {
                 _temperature_logging_face_update_display(logger_state, movement_use_imperial_units(), movement_clock_mode_24h());
             }
 
