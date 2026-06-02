@@ -30,11 +30,16 @@
 static bool skip = false;
 
 static void _temperature_logging_face_log_data(temperature_logging_state_t *logger_state) {
-    watch_date_time_t date_time = watch_rtc_get_date_time();
-    size_t pos = logger_state->data_points % TEMPERATURE_LOGGING_NUM_DATA_POINTS;
+    if (logger_state->data_points >= TEMPERATURE_LOGGING_NUM_DATA_POINTS) 
+        return;
+    
+    float temp = movement_get_temperature();
 
-    logger_state->data[pos].timestamp.reg = date_time.reg;
-    logger_state->data[pos].temperature_c = movement_get_temperature();
+    if (logger_state->data_points > 0 && logger_state->data[logger_state->data_points - 1].temperature_c == temp) 
+        return
+
+    logger_state->data[logger_state->data_points].delta_seconds = logger_state->delta_seconds;
+    logger_state->data[logger_state->data_points].temperature_c = temp;
     logger_state->data_points++;
 }
 
@@ -52,26 +57,10 @@ static void _temperature_logging_face_update_display(temperature_logging_state_t
         watch_display_text(WATCH_POSITION_BOTTOM, "no dat");
         sprintf(buf, "%2d", logger_state->display_index);
         watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
-    } else if (logger_state->ts_ticks) {
-        // we are displaying the timestamp in response to a button press
-        watch_date_time_t date_time = logger_state->data[pos].timestamp;
-        watch_set_colon();
-        if (clock_mode_24h) {
-            watch_set_indicator(WATCH_INDICATOR_24H);
-        } else {
-            if (date_time.unit.hour > 11) watch_set_indicator(WATCH_INDICATOR_PM);
-            date_time.unit.hour %= 12;
-            if (date_time.unit.hour == 0) date_time.unit.hour = 12;
-        }
-        watch_display_text(WATCH_POSITION_TOP_LEFT, "AT");
-        sprintf(buf, "%2d", date_time.unit.day);
-        watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
-        sprintf(buf, "%2d%02d%02d", date_time.unit.hour, date_time.unit.minute, date_time.unit.second);
-        watch_display_text(WATCH_POSITION_BOTTOM, buf);
     } else {
         // we are displaying the temperature
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "LOG", "TL");
-        sprintf(buf, "%2d", logger_state->display_index);
+        sprintf(buf, "%2d", logger_state->data[pos].delta_seconds);
         watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
         if (in_fahrenheit) {
             watch_display_float_with_best_effort(logger_state->data[pos].temperature_c * 1.8 + 32.0, "#F");
@@ -96,41 +85,57 @@ void temperature_logging_face_setup(uint8_t watch_face_index, void ** context_pt
 void temperature_logging_face_activate(void *context) {
     temperature_logging_state_t *logger_state = (temperature_logging_state_t *)context;
     logger_state->display_index = 0;
-    logger_state->ts_ticks = 0;
 }
 
 bool temperature_logging_face_loop(movement_event_t event, void *context) {
     temperature_logging_state_t *logger_state = (temperature_logging_state_t *)context;
     switch (event.event_type) {
         case EVENT_TIMEOUT:
-            movement_move_to_face(0);
+            //no timeout!
             break;
         case EVENT_LIGHT_LONG_PRESS:
-            // light button shows the timestamp, but if you need the light, long press it.
-            movement_illuminate_led();
+            //TODO
             break;
-        case EVENT_LIGHT_BUTTON_DOWN:
-            logger_state->ts_ticks = 2;
+        case EVENT_ALARM_LONG_PRESS: //start/stop logging
+            if (!logger_state->is_logging) {
+                //Start
+                logger_state->is_logging = true;
+                logger_state->last_second = 66;
+                logger_state->delta_seconds = 0;
+                logger_state->data_points = 0;
+                watch_set_indicator(WATCH_INDICATOR_SIGNAL);
+            } else {
+                //Stop
+                logger_state->is_logging = false;
+                logger_state->bell_shown = false;
+                watch_clear_indicator(WATCH_INDICATOR_BELL);
+                watch_clear_indicator(WATCH_INDICATOR_SIGNAL);
+            }
+            break;
+        case EVENT_LIGHT_BUTTON_UP: //show previous datapoint
+            logger_state->display_index = (logger_state->display_index - 1) % TEMPERATURE_LOGGING_NUM_DATA_POINTS;
             _temperature_logging_face_update_display(logger_state, movement_use_imperial_units(), movement_clock_mode_24h());
             break;
-        case EVENT_ALARM_BUTTON_DOWN:
+        case EVENT_ALARM_BUTTON_UP: //show next datapoint
             logger_state->display_index = (logger_state->display_index + 1) % TEMPERATURE_LOGGING_NUM_DATA_POINTS;
-            logger_state->ts_ticks = 0;
-            // fall through
+            _temperature_logging_face_update_display(logger_state, movement_use_imperial_units(), movement_clock_mode_24h());
+            break;
         case EVENT_ACTIVATE:
-            if (skip) {
-                movement_move_to_next_face();
-                return false;
-            }
             _temperature_logging_face_update_display(logger_state, movement_use_imperial_units(), movement_clock_mode_24h());
             break;
         case EVENT_TICK:
-            if (logger_state->ts_ticks && --logger_state->ts_ticks == 0) {
-                _temperature_logging_face_update_display(logger_state, movement_use_imperial_units(), movement_clock_mode_24h());
+            if (logger_state->is_logging && watch_rtc_get_date_time().unit.second != logger_state->last_second) { 
+                logger_state->last_second = watch_rtc_get_date_time().unit.second;                          
+                logger_state->bell_shown = !state->bell_shown;
+                if(logger_state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
+                else watch_clear_indicator(WATCH_INDICATOR_BELL); 
+                _temperature_logging_face_log_data(logger_state);
+                _temperature_logging_face_update_display(logger_state);
+                logger_state->delta_seconds++;
             }
             break;
         case EVENT_BACKGROUND_TASK:
-            _temperature_logging_face_log_data(logger_state);
+            //no bg task
             break;
         default:
             movement_default_loop_handler(event);
@@ -147,10 +152,6 @@ void temperature_logging_face_resign(void *context) {
 movement_watch_face_advisory_t temperature_logging_face_advise(void *context) {
     (void) context;
     movement_watch_face_advisory_t retval = { 0 };
-
-    // this will get called at the top of each minute, so all we check is if we're at the top of the hour as well.
-    // if we are, we ask for a background task.
-    retval.wants_background_task = watch_rtc_get_date_time().unit.minute == 0;
-
+    retval.wants_background_task = false;
     return retval;
 }
