@@ -37,6 +37,7 @@ const watch_face_t watch_faces[] = {
     sunrise_sunset_face,
     temperature_display_face,
     temperature_correction_face,
+    temperature_logging_face,
     voltage_face,
     endless_runner_face,
 
