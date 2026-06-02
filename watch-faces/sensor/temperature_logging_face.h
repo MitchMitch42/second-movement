@@ -65,14 +65,14 @@ typedef struct {
 } thermistor_logger_data_point_t;
 
 typedef struct {
-    uint8_t display_index;  // the index we are displaying on screen
+    int16_t display_index;  // the index we are displaying on screen
     int32_t data_points;    // the absolute number of data points logged
     uint16_t delta_seconds; // how many seconds passed after the first logging
     uint8_t last_second;
     bool bell_shown;
     bool is_logging;
-    int8_t ts_ticks;
-    bool temp_changed;
+    bool alternative_display;
+    bool confirmed;
     thermistor_logger_data_point_t data[TEMPERATURE_LOGGING_NUM_DATA_POINTS];
 } temperature_logging_state_t;
 
