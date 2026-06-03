@@ -37,7 +37,7 @@ bool _clear;
 uint8_t _com;
 uint8_t _seg;
 
-int8_t signal_tune[] = {
+int8_t hp_signal_tune[] = {
     BUZZER_NOTE_B5, 12,
     BUZZER_NOTE_REST, 1,
     BUZZER_NOTE_E6, 12,
@@ -153,7 +153,7 @@ bool easteregg_face_loop(movement_event_t event, void *context) {
             break;
 
         case EVENT_ALARM_BUTTON_DOWN:
-            watch_buzzer_play_sequence(signal_tune, NULL);
+            watch_buzzer_play_sequence(hp_signal_tune, NULL);
             break;
         
         default:
