@@ -38,6 +38,8 @@ static bool _temperature_logging_face_log_data(temperature_logging_state_t *logg
     float temp = movement_get_temperature();
     //temp= debug_data[debug_index++ % (sizeof(debug_data) / sizeof(float))];
 
+    temp = (float)((int)(temp * 10.0f + (temp >= 0 ? 0.5f : -0.5f))) / 10.0f;
+
     if (logger_state->data_points > 0 && logger_state->data[logger_state->data_points - 1].temperature_c == temp) 
         return false;
 
