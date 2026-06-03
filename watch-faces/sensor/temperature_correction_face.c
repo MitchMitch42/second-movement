@@ -172,6 +172,30 @@ static void temperature_correction_face_display_settings(temperature_correction_
     }
 }
 
+static void temperature_correction_face_display_coefficient(temperature_correction_state_t *state) {
+    char buf[8];
+    watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "      ", "      ");
+
+    switch (state->show_state) {
+        case 0:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "STE", "ST");
+            temperature_correction_face_show_temperature(state->temperature_start, movement_use_imperial_units());
+            break;
+        case 1:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ETE", "ET");
+            temperature_correction_face_show_temperature(state->temperature_end, movement_use_imperial_units());
+            break;
+        case 2:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "DEL", "DE");
+            sprintf(buf, "%06d", state->delta); 
+            watch_display_text(WATCH_POSITION_BOTTOM, buf);
+            break;
+        default:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP, "TCO", "TC");
+            break;
+    }
+}
+
 /// @brief advance the active setting value up or down
 /// @param state face state containing the selected setting
 /// @param forward true to increment, false to decrement
@@ -248,6 +272,20 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
             break; //no light
+        case EVENT_LIGHT_LONG_PRESS:
+            switch (state->mode) {
+                case temperature_correction_waiting:   
+                    state->mode = temperature_correction_show_coefficient;
+                    state->show_state = 0;
+                    temperature_correction_face_display_coefficient(state);
+                    break;  
+                case temperature_correction_coefficient:     
+                case temperature_correction_show_coefficient: 
+                case temperature_correction_running:
+                case temperature_correction_setting:
+                    break;
+            }
+            break;
         case EVENT_LIGHT_BUTTON_UP:     
             switch (state->mode) {
                 case temperature_correction_waiting: // enter settings
@@ -266,10 +304,16 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     temperature_correction_face_display_settings(state, event.subsecond);
                     if (state->settings_state > 7) state->mode = temperature_correction_waiting;
                     break;
+                case temperature_correction_show_coefficient:
+                    state->show_state++;
+                    temperature_correction_face_display_coefficient(state);
+                    if (state->show_state > 2) state->mode = temperature_correction_waiting;
+                    break;
             }
             break;
         case EVENT_TICK:
             switch (state->mode) {
+                case temperature_correction_show_coefficient: //fallthrough
                 case temperature_correction_waiting:
                     break;
                 case temperature_correction_running: 
@@ -299,8 +343,8 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         
                         state->delta++;
                         float temperature_current = movement_get_temperature();
-                        float temperature_end = state->temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
-                        float coeff_f= temperature_correction_face_calculate_coefficient(state->delta, state->temperature_start, temperature_current, temperature_end);
+                        state->temperature_end = state->temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
+                        float coeff_f= temperature_correction_face_calculate_coefficient(state->delta, state->temperature_start, temperature_current, state->temperature_end);
 
                         if (state->last_second == 42) {//once a minute
                             temperature_correction_face_add_to_rolling_buffer(&state->buffer, temperature_current);
@@ -352,6 +396,8 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     temperature_correction_face_advance_settings(state, true);
                     temperature_correction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
                     break;
+                case temperature_correction_show_coefficient:
+                    break;
             }
             break;
         case EVENT_ALARM_LONG_PRESS:
@@ -367,6 +413,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     state->temperature_start = movement_get_temperature();
                     state->mode = temperature_correction_coefficient;
                     break;
+                case temperature_correction_show_coefficient: 
                 case temperature_correction_running: 
                     break;
                 case temperature_correction_setting:
