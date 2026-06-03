@@ -57,17 +57,22 @@
 #include "movement.h"
 #include "watch.h"
 
-#define TEMPERATURE_LOGGING_NUM_DATA_POINTS (36)
+#define TEMPERATURE_LOGGING_NUM_DATA_POINTS (150)
 
 typedef struct {
-    watch_date_time_t timestamp;
+    uint16_t delta_seconds;
     float temperature_c;
 } thermistor_logger_data_point_t;
 
 typedef struct {
-    uint8_t display_index;  // the index we are displaying on screen
-    uint8_t ts_ticks;       // when the user taps the LIGHT button, we show the timestamp for a few ticks.
+    int16_t display_index;  // the index we are displaying on screen
     int32_t data_points;    // the absolute number of data points logged
+    uint16_t delta_seconds; // how many seconds passed after the first logging
+    uint8_t last_second;
+    bool bell_shown;
+    bool is_logging;
+    bool alternative_display;
+    bool confirmed;
     thermistor_logger_data_point_t data[TEMPERATURE_LOGGING_NUM_DATA_POINTS];
 } temperature_logging_state_t;
 
