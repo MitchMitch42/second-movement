@@ -34,9 +34,10 @@
 
 static bool skip = false;
 
-//int debug_index = -1;
-//float debug_data[] = {31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
+//int debug_index = 0;
+//float debug_data[] = {31.5, 31.5, 31.5, 31.5, 31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
 //float debug_data[] = { 15.7, 15.6, 15.6, 15.6, 15.6, 15.6, 15.5, 15.5, 15.5, 15.5, 15.5, 15.4, 15.4, 15.4, 15.4, 15.3, 15.3, 15.3, 15.3, 15.2, 15.2, 15.2, 15.2, 15.2, 15.1, 15.1, 15.1, 15.1, 15.1, 15.0, 15.0, 15.0, 15.0, 14.9, 14.9, 14.9, 14.9, 14.9, 14.8, 14.8, 14.8, 14.8, 14.8, 14.7, 14.7, 14.7, 14.7, 14.7, 14.6, 14.6, 14.6, 14.6, 14.5, 14.5 };
+//float debug_data[] = {29.8, 29.5, 28.7, 27.9, 27.1, 26.5, 26.0, 25.5, 25.1, 24.7, 24.3, 24.0, 23.7, 23.5, 23.3, 23.1, 22.9, 22.7, 22.6, 22.5, 22.4, 22.3, 22.2, 22.1, 22.1, 22.0, 22.0, 21.9, 21.9, 21.9, 21.9, 21.8, 21.8, 21.8, 21.7, 21.7, 21.7, 21.7, 21.7, 21.7, 21.6, 21.6, 21.6, 21.6, 21.6 };
 
 /// @brief add a value to a rolling buffer
 /// @param buffer rolling buffer to update
@@ -345,7 +346,9 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         
                         state->delta++;
                         float temperature_current = movement_get_temperature();
+                        //temperature_current = debug_data[debug_index++ % (sizeof(debug_data) / sizeof(float))];
                         state->temperature_end = state->temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
+                        //state->temperature_end = 21.6;
                         float coeff_f= temperature_correction_face_calculate_coefficient(state->delta, state->temperature_start, temperature_current, state->temperature_end);
 
                         if (state->last_second == 42) {//once a minute
@@ -413,6 +416,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     temperature_correction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES);
                     
                     state->temperature_start = movement_get_temperature();
+                    //state->temperature_start = debug_data[debug_index++ % (sizeof(debug_data) / sizeof(float))];
                     state->mode = temperature_correction_coefficient;
                     break;
                 case temperature_correction_show_coefficient: 
