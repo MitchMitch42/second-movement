@@ -78,15 +78,15 @@ typedef struct {
     uint8_t show_state;
 } temperature_correction_state_t;
 
-void temperature_correction_face_setup(uint8_t watch_face_index, void ** context_ptr);
-void temperature_correction_face_activate(void *context);
-bool temperature_correction_face_loop(movement_event_t event, void *context);
-void temperature_correction_face_resign(void *context);
+void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context_ptr);
+void temperature_prediction_face_activate(void *context);
+bool temperature_prediction_face_loop(movement_event_t event, void *context);
+void temperature_prediction_face_resign(void *context);
 
-#define temperature_correction_face ((const watch_face_t){ \
-    temperature_correction_face_setup, \
-    temperature_correction_face_activate, \
-    temperature_correction_face_loop, \
-    temperature_correction_face_resign, \
+#define temperature_prediction_face ((const watch_face_t){ \
+    temperature_prediction_face_setup, \
+    temperature_prediction_face_activate, \
+    temperature_prediction_face_loop, \
+    temperature_prediction_face_resign, \
     NULL, \
 })
