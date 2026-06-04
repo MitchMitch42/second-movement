@@ -55,6 +55,7 @@ static int temperature_correction_face_add_to_rolling_buffer(temperature_correct
 /// @param coefficient heat transfer coefficient
 /// @return corrected end temperature after applying the cooling model
 static float temperature_correction_face_calculate_end_temperature_raw(int delta, float temperature_current, float temperature_start, float coefficient) {
+    //=(Tcurrent-Tstart*EXP(-k*time))/(1-EXP(-k*time))
     float ex =  expf(-coefficient * (float)delta);
     return (temperature_current - temperature_start * ex) / (1 - ex);
 }
@@ -67,6 +68,7 @@ static float temperature_correction_face_calculate_end_temperature_raw(int delta
 /// @return heat transfer coefficient
 static float temperature_correction_face_calculate_coefficient(int delta, float temperature_start, float temperature_current, float temperature_end ) {
     // =(1/G28)*LN((J28-I28)/(H28-I28))
+    // =(1/delta)*LN((Tstart-Tend)/(Tcurrent-Tend))
     return (1.0 / (float)delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
 }
 
