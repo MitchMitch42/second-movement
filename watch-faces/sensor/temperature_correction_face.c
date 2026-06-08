@@ -40,23 +40,12 @@ static bool skip = false;
 
 /// @brief add a value to a rolling buffer
 /// @param buffer rolling buffer to update
-/// @param value temperature sample to append
+/// @param value value to append
 static int temperature_correction_face_add_to_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, float value) {
     buffer->head_index = (buffer->head_index + 1) % buffer->max;
     buffer->length = buffer->length + 1 < buffer->max ? buffer->length + 1 : buffer->max;
     buffer->data[buffer->head_index] = value;
     return buffer->length;
-}
-
-/// @brief calculate end temperature using Newton's law of cooling
-/// @param delta how many datapoints were logged between temperature_start and temperature_current
-/// @param temperature_current currently measured temperature
-/// @param temperature_start start temperature 
-/// @param coefficient heat transfer coefficient
-/// @return corrected end temperature after applying the cooling model
-static float temperature_correction_face_calculate_end_temperature_raw(int delta, float temperature_current, float temperature_start, float coefficient) {
-    float ex =  expf(-coefficient * (float)delta);
-    return (temperature_current - temperature_start * ex) / (1 - ex);
 }
 
 /// @brief calculate heat transfer coefficient of Newton's law of cooling
@@ -70,14 +59,15 @@ static float temperature_correction_face_calculate_coefficient(int delta, float 
     return (1.0 / (float)delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
 }
 
-/// @brief calculate end temperature using given rolling buffer and given coefficient
+/// @brief calculate end temperature using Newton's law of cooling
 /// @param state face state containing temperature history and coefficient
 /// @return corrected end temperature based on buffered data
 static float temperature_correction_face_calculate_end_temperature(temperature_correction_state_t *state) {
     float temperature_current = state->buffer.data[state->buffer.head_index];
     int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
     float temperature_start = state->buffer.data[start_index];
-    return temperature_correction_face_calculate_end_temperature_raw(state->buffer.length - 1, temperature_current, temperature_start, state->coefficient);
+    float ex =  expf(-state->coefficient * (float)(state->buffer.length - 1)));
+    return (temperature_current - temperature_start * ex) / (1 - ex);
 }
 
 /// @brief display a temperature
@@ -100,6 +90,7 @@ static float temperature_correction_face_calculate_average(temperature_correctio
 
 /// @brief calculate corrected temperature and display it
 /// @param state face state used to compute and display the temperature
+/// @param display true if temperature shall be displayed
 static void temperature_correction_face_calculate_temperature_and_display(temperature_correction_state_t *state, bool display) {
     if (state->buffer.length > 1) {
         float end_temperature = temperature_correction_face_calculate_end_temperature(state);
@@ -107,12 +98,6 @@ static void temperature_correction_face_calculate_temperature_and_display(temper
         float average_temperature = temperature_correction_face_calculate_average(&state->calculated_temperatures);
         if(display) temperature_correction_face_show_temperature(average_temperature, movement_use_imperial_units());
     }
-}
-
-/// @brief log the current temperature into the sample buffer
-/// @param state face state containing the buffer to append into
-static int temperature_correction_face_log_data(temperature_correction_state_t *state) {
-    return temperature_correction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
 }
 
 /// @brief reset a rolling buffer
@@ -278,7 +263,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         state->bell_shown = !state->bell_shown;
                         if(state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
                         else watch_clear_indicator(WATCH_INDICATOR_BELL);               
-                        int data_points_cnt = temperature_correction_face_log_data(state);
+                        int data_points_cnt = temperature_correction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
                         char buf[8];
                         sprintf(buf, "%2d", data_points_cnt);
                         watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
