@@ -32,8 +32,6 @@
 #define TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE 60
 #define TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT 30
 
-static bool skip = false;
-
 //int debug_index = -1;
 //float debug_data[] = {31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
 //float debug_data[] = { 15.7, 15.6, 15.6, 15.6, 15.6, 15.6, 15.5, 15.5, 15.5, 15.5, 15.5, 15.4, 15.4, 15.4, 15.4, 15.3, 15.3, 15.3, 15.3, 15.2, 15.2, 15.2, 15.2, 15.2, 15.1, 15.1, 15.1, 15.1, 15.1, 15.0, 15.0, 15.0, 15.0, 14.9, 14.9, 14.9, 14.9, 14.9, 14.8, 14.8, 14.8, 14.8, 14.8, 14.7, 14.7, 14.7, 14.7, 14.7, 14.6, 14.6, 14.6, 14.6, 14.5, 14.5 };
@@ -41,11 +39,15 @@ static bool skip = false;
 /// @brief add a value to a rolling buffer
 /// @param buffer rolling buffer to update
 /// @param value value to append
-static int temperature_correction_face_add_to_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, float value) {
+static void temperature_correction_face_add_to_rolling_buffer(temperature_correction_rolling_buffer_t *buffer, float value, bool display) {
     buffer->head_index = (buffer->head_index + 1) % buffer->max;
     buffer->length = buffer->length + 1 < buffer->max ? buffer->length + 1 : buffer->max;
     buffer->data[buffer->head_index] = value;
-    return buffer->length;
+    if (display) { //display buffer item count
+        char buf[8];
+        sprintf(buf, "%2d", buffer->length);
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+    }
 }
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
@@ -87,7 +89,6 @@ static float temperature_correction_face_calculate_coefficient_with_linear_regre
     } else {
         return (float)(-((n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)));
     }
-    //TODO: coeff must be in 1/sec!!!
 }
 
 /// @brief calculate end temperature using Newton's law of cooling
@@ -243,9 +244,6 @@ static void temperature_correction_face_advance_settings(temperature_correction_
 void temperature_correction_face_setup(uint8_t watch_face_index, void ** context_ptr) {
     (void) watch_face_index;
 
-    // if temperature is invalid, we don't have a temperature sensor which means we shouldn't be here.
-    // if (movement_get_temperature() == 0xFFFFFFFF) skip = true;
-
     if (*context_ptr == NULL) {
         *context_ptr = malloc(sizeof(temperature_correction_state_t));
         memset(*context_ptr, 0, sizeof(temperature_correction_state_t));
@@ -270,10 +268,6 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
 
     switch (event.event_type) {
         case EVENT_ACTIVATE:
-            if (skip) {
-                movement_move_to_next_face();
-                return false;
-            }
             watch_display_text_with_fallback(WATCH_POSITION_TOP, "TCO", "TC");
             if(state->mode == temperature_correction_setting) { 
                 state->mode = temperature_correction_waiting;
@@ -311,10 +305,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         state->bell_shown = !state->bell_shown;
                         if(state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
                         else watch_clear_indicator(WATCH_INDICATOR_BELL);               
-                        int data_points_cnt = temperature_correction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
-                        char buf[8];
-                        sprintf(buf, "%2d", data_points_cnt);
-                        watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+                        temperature_correction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature(), true);
                         temperature_correction_face_calculate_temperature_and_display(state, state->tick_show_real_temperature == 0);
                         if (state->tick_show_real_temperature == 0) watch_clear_indicator(WATCH_INDICATOR_LAP);
                         else state->tick_show_real_temperature--;
@@ -333,7 +324,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         //TODO: show something here, maybe precalculate coeff
 
                         if (state->last_second == 42) {//once a minute (TODO: this is ugly)
-                            temperature_correction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
+                            temperature_correction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature(), true);
                             if (state->buffer->length == state->buffer->max) { //buffer full
                                 temperature_correction_face_stop_logging(state);
                                 watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
