@@ -169,6 +169,30 @@ static void temperature_correction_face_display_coefficient(float coeff_f) {
     watch_display_text(WATCH_POSITION_BOTTOM, buf);
 }
 
+static void temperature_correction_face_display_coefficient(temperature_correction_state_t *state) {
+    char buf[8];
+    watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "      ", "      ");
+
+    switch (state->show_state) {
+        case 0:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "STE", "ST");
+            temperature_correction_face_show_temperature(state->temperature_start, movement_use_imperial_units());
+            break;
+        case 1:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ETE", "ET");
+            temperature_correction_face_show_temperature(state->temperature_end, movement_use_imperial_units());
+            break;
+        case 2:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "DEL", "DE");
+            sprintf(buf, "%06d", state->delta); 
+            watch_display_text(WATCH_POSITION_BOTTOM, buf);
+            break;
+        default:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP, "TCO", "TC");
+            break;
+    }
+}
+
 /// @brief display current settings on the watch face
 /// @param state face state containing settings values
 /// @param subsecond current subsecond value used for blink timing
@@ -275,6 +299,20 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
             break; //no light
+        case EVENT_LIGHT_LONG_PRESS:
+            switch (state->mode) {
+                case temperature_correction_waiting:   
+                    state->mode = temperature_correction_show_coefficient;
+                    state->show_state = 0;
+                    temperature_correction_face_display_coefficient(state);
+                    break;  
+                case temperature_correction_coefficient:     
+                case temperature_correction_show_coefficient: 
+                case temperature_correction_running:
+                case temperature_correction_setting:
+                    break;
+            }
+            break;
         case EVENT_LIGHT_BUTTON_UP:     
             switch (state->mode) {
                 case temperature_correction_waiting: // enter settings
@@ -293,10 +331,16 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     temperature_correction_face_display_settings(state, event.subsecond);
                     if (state->settings_state > 7) state->mode = temperature_correction_waiting;
                     break;
+                case temperature_correction_show_coefficient:
+                    state->show_state++;
+                    temperature_correction_face_display_coefficient(state);
+                    if (state->show_state > 2) state->mode = temperature_correction_waiting;
+                    break;
             }
             break;
         case EVENT_TICK:
             switch (state->mode) {
+                case temperature_correction_show_coefficient: //fallthrough
                 case temperature_correction_waiting:
                     break;
                 case temperature_correction_running: 
@@ -364,6 +408,8 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     temperature_correction_face_advance_settings(state, true);
                     temperature_correction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
                     break;
+                case temperature_correction_show_coefficient:
+                    break;
             }
             break;
         case EVENT_ALARM_LONG_PRESS:
@@ -382,6 +428,8 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                 case temperature_correction_setting:
                     temperature_correction_face_advance_settings(state, false);
                     temperature_correction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
+                    break;
+                case temperature_correction_show_coefficient: 
                     break;
             }
             break;

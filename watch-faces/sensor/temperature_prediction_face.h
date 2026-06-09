@@ -45,6 +45,7 @@ typedef enum {
     temperature_correction_running,
     temperature_correction_setting,
     temperature_correction_coefficient,
+    temperature_correction_show_coefficient,
 } temperature_correction_mode_t;
 
 typedef struct {
@@ -70,6 +71,7 @@ typedef struct {
     bool bell_shown;                                                  // whether the bell indicator is currently shown
     temperature_correction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation)
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
+    uint8_t show_state;                                               // state index for showing the coefficient data after calculation
     uint8_t tick_show_real_temperature;                               // if > 0: show the real temperature the next few ticks
 } temperature_correction_state_t;
 
