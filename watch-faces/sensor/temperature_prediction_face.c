@@ -37,6 +37,11 @@
 //float debug_data[] = { 15.7, 15.6, 15.6, 15.6, 15.6, 15.6, 15.5, 15.5, 15.5, 15.5, 15.5, 15.4, 15.4, 15.4, 15.4, 15.3, 15.3, 15.3, 15.3, 15.2, 15.2, 15.2, 15.2, 15.2, 15.1, 15.1, 15.1, 15.1, 15.1, 15.0, 15.0, 15.0, 15.0, 14.9, 14.9, 14.9, 14.9, 14.9, 14.8, 14.8, 14.8, 14.8, 14.8, 14.7, 14.7, 14.7, 14.7, 14.7, 14.6, 14.6, 14.6, 14.6, 14.5, 14.5 };
 //float debug_data[] = {29.8, 29.5, 28.7, 27.9, 27.1, 26.5, 26.0, 25.5, 25.1, 24.7, 24.3, 24.0, 23.7, 23.5, 23.3, 23.1, 22.9, 22.7, 22.6, 22.5, 22.4, 22.3, 22.2, 22.1, 22.1, 22.0, 22.0, 21.9, 21.9, 21.9, 21.9, 21.8, 21.8, 21.8, 21.7, 21.7, 21.7, 21.7, 21.7, 21.7, 21.6, 21.6, 21.6, 21.6, 21.6 };
 
+float debug_Tfirst;
+float debug_Tlast;
+float debug_Tend;
+int8_t debug_delta;
+
 /// @brief add a value to a rolling buffer
 /// @param buffer rolling buffer to update
 /// @param value value to append
@@ -74,6 +79,10 @@ static float temperature_prediction_face_calculate_coefficient_with_linear_regre
     int n = 0; 
     for (int i = ignore_start_cnt; i < buffer->length; i++) {
         if (fabs(buffer->data[i] - temp_end) <= ignore_delta_temp) {
+            debug_Tlast = buffer->data[i];
+            debug_delta = n - 1;
+            debug_Tfirst = buffer->data[ignore_start_cnt];
+            debug_Tend = temp_end;
             break; //temperature is near end temperature, becoming unstable
         } else {
             float x = (i - ignore_start_cnt) * 60.0; //x = delta time in seconds
@@ -85,11 +94,9 @@ static float temperature_prediction_face_calculate_coefficient_with_linear_regre
             n++;
         }
     }
-    if (n * sum_xx - sum_x * sum_x == 0) {
-        return 0;
-    } else {
-        return (float)(-((n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)));
-    }
+
+    if (n * sum_xx - sum_x * sum_x == 0) return 0;
+    else return (float)(-((n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)));
 }
 
 /// @brief calculate end temperature using Newton's law of cooling
@@ -178,16 +185,20 @@ static void temperature_prediction_face_display_coefficient_data(temperature_pre
 
     switch (state->show_state) {
         case 0:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "STE", "ST");
-            temperature_prediction_face_show_temperature(state->temperature_start, movement_use_imperial_units());
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "FIS", "FI");
+            temperature_prediction_face_show_temperature(debug_Tfirst, movement_use_imperial_units());
             break;
         case 1:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ETE", "ET");
-            temperature_prediction_face_show_temperature(state->temperature_end, movement_use_imperial_units());
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "LAS", "LA");
+            temperature_prediction_face_show_temperature(debug_Tlast, movement_use_imperial_units());
             break;
         case 2:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ETE", "ET");
+            temperature_prediction_face_show_temperature(debug_Tend, movement_use_imperial_units());
+            break;
+        case 3:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "DEL", "DE");
-            sprintf(buf, "%06d", state->delta); 
+            sprintf(buf, "%06d", debug_delta); 
             watch_display_text(WATCH_POSITION_BOTTOM, buf);
             break;
         default:
@@ -337,7 +348,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_show_coefficient:
                     state->show_state++;
                     temperature_prediction_face_display_coefficient_data(state);
-                    if (state->show_state > 2) state->mode = temperature_prediction_waiting;
+                    if (state->show_state > 3) state->mode = temperature_prediction_waiting;
                     break;
             }
             break;
