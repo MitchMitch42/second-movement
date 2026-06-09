@@ -28,9 +28,9 @@
 #include "temperature_correction_face.h"
 
 // Default initial values for the temperature correction face
-#define TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT 0.0013240584F
-#define TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE 20
-#define TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT 5
+#define TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT 0.002F
+#define TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE 60
+#define TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT 30
 
 static bool skip = false;
 
@@ -49,24 +49,19 @@ static int temperature_correction_face_add_to_rolling_buffer(temperature_correct
 }
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
-/// @param delta how many datapoints were logged between temperature_start and temperature_current
-/// @param temperature_start start temperature
-/// @param temperature_current currently measured temperature
-/// @param temperature_end end temperature (e.g. real ambient temperature) that the model should converge to
-/// @return heat transfer coefficient
 static float temperature_correction_face_calculate_coefficient(int delta, float temperature_start, float temperature_current, float temperature_end ) {
     // =(1/G28)*LN((J28-I28)/(H28-I28))
     return (1.0 / (float)delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
 }
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using all points and performing a linear regression of the transformed logarithmic curve
-static float temperature_correction_face_calculate_coefficient_with_linear_regression(temperature_correction_rolling_buffer_t *buffer, int ignore_start_cnt, float ignore_delta_temp) {
+static float temperature_correction_face_calculate_coefficient_with_linear_regression(temperature_correction_rolling_buffer_t *buffer, int end_temp_cnt, int ignore_start_cnt, float ignore_delta_temp) {
     //determine end temperature
     float temp_end = 0;
-    for (int i = buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES; i < buffer->length; i++) {
+    for (int i = buffer->length - end_temp_cnt; i < buffer->length; i++) {
         temp_end += buffer->data[i];
     }
-    temp_end /= TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES;
+    temp_end /= end_temp_cnt;
 
     //calculate values for linear regression, formula is: -m=(nΣxy-ΣxΣy)/(mΣx²-(Σx)²)
     float sum_x = 0;
@@ -87,7 +82,12 @@ static float temperature_correction_face_calculate_coefficient_with_linear_regre
             n++;
         }
     }
-    return (float)(-((n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)));
+    if (n * sum_xx - sum_x * sum_x == 0) {
+        return 0;
+    } else {
+        return (float)(-((n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)));
+    }
+    //TODO: coeff must be in 1/sec!!!
 }
 
 /// @brief calculate end temperature using Newton's law of cooling
@@ -125,12 +125,8 @@ static bool temperature_correction_face_equilibrium_reached(temperature_correcti
     float min = buffer->data[buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES];
     float max = buffer->data[buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES];
     for (int i = buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES + 1; i < buffer->length; i++) {
-        if (buffer->data[i] < min) {
-            min = buffer->data[i]; // Update minimum
-        }
-        if (buffer->data[i] > max) {
-            max = buffer->data[i]; // Update maximum
-        }
+        if (buffer->data[i] < min) min = buffer->data[i]; // Update minimum
+        if (buffer->data[i] > max) max = buffer->data[i]; // Update maximum
     }
     return max - min <= TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD;
 } 
@@ -165,13 +161,18 @@ static void temperature_correction_face_stop_logging(temperature_correction_stat
     state->mode = temperature_correction_waiting;
 }
 
+/// @brief show the coefficient at the bottom line
+static void temperature_correction_face_display_coefficient(float coeff_f) {
+    int coeff = (int)(coeff_f * 100000 + 0.5); // 0.0013240584 -> 000132
+    sprintf(buf, "%06d", coeff); 
+    watch_display_text(WATCH_POSITION_BOTTOM, buf);
+}
+
 /// @brief display current settings on the watch face
 /// @param state face state containing settings values
 /// @param subsecond current subsecond value used for blink timing
 static void temperature_correction_face_display_settings(temperature_correction_state_t *state, uint8_t subsecond) {
     char buf[8];
-    int coeff;
-
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "      ", "      ");
 
     switch (state->settings_state) {
@@ -193,10 +194,8 @@ static void temperature_correction_face_display_settings(temperature_correction_
         case 5:
         case 6:
         case 7:
-            coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
-            sprintf(buf, "%06d", coeff); 
-            watch_display_text(WATCH_POSITION_BOTTOM, buf);
+            temperature_correction_face_display_coefficient(state->coefficient);
             if (subsecond % 2) 
                 watch_display_string(" ", state->settings_state + 2);
             break;
@@ -331,34 +330,23 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         if(state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
                         else watch_clear_indicator(WATCH_INDICATOR_BELL);              
                         
-                        float temperature_current = movement_get_temperature();
-                        float temperature_end = state->temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
-                        float coeff_f= temperature_correction_face_calculate_coefficient(state->delta, state->temperature_start, temperature_current, temperature_end);
+                        //TODO: show something here, maybe precalculate coeff
 
                         if (state->last_second == 42) {//once a minute (TODO: this is ugly)
-                            temperature_correction_face_add_to_rolling_buffer(&state->buffer, temperature_current);
+                            temperature_correction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
                             if (state->buffer->length == state->buffer->max) { //buffer full
                                 temperature_correction_face_stop_logging(state);
                                 watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
                                 break;
                             } else if (state->buffer.length >= TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES) { //only after n minutes
                                 if (temperature_correction_face_equilibrium_reached(&state->buffer)) { //temperature is stable: stop calculation
-                                    coeff_f = temperature_correction_face_calculate_coefficient_with_linear_regression(&state->buffer, TEMPERATURE_CORRECTION_CALCULATION_IGNORE_START_MINUTES, TEMPERATURE_CORRECTION_CALCULATION_END_TEMP_DELTA);
-                                    state->coefficient = coeff_f; //save new coefficient
+                                    state->coefficient = temperature_correction_face_calculate_coefficient_with_linear_regression(&state->buffer, TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES, TEMPERATURE_CORRECTION_CALCULATION_IGNORE_START_MINUTES, TEMPERATURE_CORRECTION_CALCULATION_END_TEMP_DELTA);
+                                    //TODO: coefficient shall only have 5 decimal places, otherwise we have a different coeff than what we show and adjust
                                     temperature_correction_face_stop_logging(state);
-                                    state->tick_show_real_temperature = 0; //display coefficient
+                                    temperature_correction_face_display_coefficient(state->coefficient);
+                                    break;
                                 }
                             }
-                        }
-
-                        //display coefficient
-                        if (state->tick_show_real_temperature == 0) {
-                            char buf[8];
-                            int coeff;
-                            coeff = (int)(coeff_f * 100000 + 0.5); // 0.0013240584 -> 000132
-                            //watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
-                            sprintf(buf, "%06d", coeff); 
-                            watch_display_text(WATCH_POSITION_BOTTOM, buf);
                         }
 
                         if (state->tick_show_real_temperature == 0) watch_clear_indicator(WATCH_INDICATOR_LAP);
@@ -374,6 +362,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
                     temperature_correction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
                     temperature_correction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
+                    tick_show_real_temperature = 0;
                     state->mode = temperature_correction_running;
                     break;
                 case temperature_correction_coefficient: //falltrough
@@ -392,6 +381,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
                     temperature_correction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX);          
+                    tick_show_real_temperature = 0;
                     state->mode = temperature_correction_coefficient;
                     break;
                 case temperature_correction_coefficient: //fallthrough
