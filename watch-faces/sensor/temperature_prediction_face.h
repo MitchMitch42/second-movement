@@ -35,14 +35,15 @@
 
 #define TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX 60
 #define TEMPERATURE_CORRECTION_AVERAGING_MAX 60
-#define TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES 5 //must be <= TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX
-#define TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD 0.1 //to trigger stop of coefficient calculation
+#define TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES 5 //defines how long the temperature shall be constant to determine that equilibrium has been reached.
+#define TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_TRESHOLD 0.1 //defines the maximum allowed temperature deviation to determine that equilibrium has been reached.
+#define TEMPERATURE_CORRECTION_CALCULATION_IGNORE_START_MINUTES 5 
+#define TEMPERATURE_CORRECTION_CALCULATION_END_TEMP_DELTA 2.0
 
 typedef enum {
     temperature_correction_waiting,
     temperature_correction_running,
     temperature_correction_setting,
-    temperature_correction_show_coefficient,
     temperature_correction_coefficient,
 } temperature_correction_mode_t;
 
@@ -59,34 +60,28 @@ typedef struct {
     temperature_correction_rolling_buffer_t calculated_temperatures; // rolling buffer holding corrected temperatures
     
     // settings for the correction algorithm using newton's law of cooling
-    float coefficient;                                              // heat transfer coefficient used for correction
+    float coefficient;                                               // heat transfer coefficient used for correction
     int buffer_size;                                                 // configured number of samples to retain in `buffer`
     int average_count;                                               // number of corrected values to average for display   
     
     //for temp logging and coefficient calculation
     uint32_t last_second;                                             // last RTC second used for timed sampling
-    
-    //for coefficient calculation
-    float temperature_start;                                          // temperature at the start of logging
-    float temperature_end;     
-    uint16_t delta;                                                   // number of samples logged since start of logging for coefficient calculation
 
     bool bell_shown;                                                  // whether the bell indicator is currently shown
     temperature_correction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation)
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
     uint8_t tick_show_real_temperature;                               // if > 0: show the real temperature the next few ticks
-    uint8_t show_state;
 } temperature_correction_state_t;
 
-void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context_ptr);
-void temperature_prediction_face_activate(void *context);
-bool temperature_prediction_face_loop(movement_event_t event, void *context);
-void temperature_prediction_face_resign(void *context);
+void temperature_correction_face_setup(uint8_t watch_face_index, void ** context_ptr);
+void temperature_correction_face_activate(void *context);
+bool temperature_correction_face_loop(movement_event_t event, void *context);
+void temperature_correction_face_resign(void *context);
 
-#define temperature_prediction_face ((const watch_face_t){ \
-    temperature_prediction_face_setup, \
-    temperature_prediction_face_activate, \
-    temperature_prediction_face_loop, \
-    temperature_prediction_face_resign, \
+#define temperature_correction_face ((const watch_face_t){ \
+    temperature_correction_face_setup, \
+    temperature_correction_face_activate, \
+    temperature_correction_face_loop, \
+    temperature_correction_face_resign, \
     NULL, \
 })
