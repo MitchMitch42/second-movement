@@ -48,7 +48,7 @@ static int temperature_correction_face_add_to_rolling_buffer(temperature_correct
     return buffer->length;
 }
 
-/// @brief calculate heat transfer coefficient of Newton's law of cooling
+/// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
 /// @param delta how many datapoints were logged between temperature_start and temperature_current
 /// @param temperature_start start temperature
 /// @param temperature_current currently measured temperature
@@ -57,6 +57,37 @@ static int temperature_correction_face_add_to_rolling_buffer(temperature_correct
 static float temperature_correction_face_calculate_coefficient(int delta, float temperature_start, float temperature_current, float temperature_end ) {
     // =(1/G28)*LN((J28-I28)/(H28-I28))
     return (1.0 / (float)delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
+}
+
+/// @brief calculate heat transfer coefficient of Newtons law of cooling, using all points and performing a linear regression of the transformed logarithmic curve
+static float temperature_correction_face_calculate_coefficient_with_linear_regression(temperature_correction_rolling_buffer_t *buffer, int ignore_start_cnt, float ignore_delta_temp) {
+    //determine end temperature
+    float temp_end = 0;
+    for (int i = buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES; i < buffer->length; i++) {
+        temp_end += buffer->data[i];
+    }
+    temp_end /= TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES;
+
+    //calculate values for linear regression, formula is: -m=(nΣxy-ΣxΣy)/(mΣx²-(Σx)²)
+    float sum_x = 0;
+    float sum_y = 0;
+    float sum_xx = 0;
+    float sum_xy = 0;
+    int n = 0; 
+    for (int i = ignore_start_cnt; i < buffer->length; i++) {
+        if (fabs(buffer->data[i] - temp_end) <= ignore_delta_temp) {
+            break; //temperature is near end temperature, becoming unstable
+        } else {
+            float x = (i - ignore_start_cnt) * 60.0; //x = delta time in seconds
+            float y = logf(buffer->data[i] - temp_end); //y = ln(T - Tend)
+            sum_x += x;
+            sum_y += y;
+            sum_xx += x * x;
+            sum xy += x * y;
+            n++;
+        }
+    }
+    return (float)(-((n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)));
 }
 
 /// @brief calculate end temperature using Newton's law of cooling
@@ -88,11 +119,12 @@ static float temperature_correction_face_calculate_average(temperature_correctio
     return sum / buffer->length;
 }
 
-/// @brief check if max-min of buffer is <= TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD
-static float temperature_correction_face_equilibrium_reached(temperature_correction_rolling_buffer_t *buffer) {
-    float min = buffer->data[0];
-    float max = buffer->data[0];
-    for (int i = 0; i < buffer->length; i++) {
+/// @brief check if max-min of the last n values of buffer is <= TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD, with n = TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES
+static bool temperature_correction_face_equilibrium_reached(temperature_correction_rolling_buffer_t *buffer) {
+    //we know that buffer->length < buffer->max, and also that the buffer has at least TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES values
+    float min = buffer->data[buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES];
+    float max = buffer->data[buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES];
+    for (int i = buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES + 1; i < buffer->length; i++) {
         if (buffer->data[i] < min) {
             min = buffer->data[i]; // Update minimum
         }
@@ -124,11 +156,13 @@ static void temperature_correction_face_init_rolling_buffer(temperature_correcti
     buffer->max = usable_length;
 }
 
-/// @brief initialize the main temperature buffers before logging
-/// @param state face state containing buffer size and averaging count
-static void temperature_correction_face_init_rolling_buffers(temperature_correction_state_t *state) {
-    temperature_correction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
-    temperature_correction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
+/// @brief stop logging of temperatures
+static void temperature_correction_face_stop_logging(temperature_correction_state_t *state) {
+    watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
+    watch_clear_indicator(WATCH_INDICATOR_BELL); 
+    watch_clear_indicator(WATCH_INDICATOR_LAP);
+    state->bell_shown = false;
+    state->mode = temperature_correction_waiting;
 }
 
 /// @brief display current settings on the watch face
@@ -297,27 +331,21 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         if(state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
                         else watch_clear_indicator(WATCH_INDICATOR_BELL);              
                         
-                        state->delta++;
-
-                        if (state->delta == 300) { //skip first 5 minutes, until then heat dissipation is not stable
-                            state->temperature_start = movement_get_temperature();
-                            state->delta = 0; 
-                            todo: bool skipped=true
-                        }
-
                         float temperature_current = movement_get_temperature();
                         float temperature_end = state->temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
                         float coeff_f= temperature_correction_face_calculate_coefficient(state->delta, state->temperature_start, temperature_current, temperature_end);
 
-                        if (state->last_second == 42) {//once a minute
+                        if (state->last_second == 42) {//once a minute (TODO: this is ugly)
                             temperature_correction_face_add_to_rolling_buffer(&state->buffer, temperature_current);
-                            if (state->buffer.length == TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES) { //only after n minutes
-                                if(temperature_correction_face_equilibrium_reached(&state->buffer)) { //temperature is stable: stop calculation
+                            if (state->buffer->length == state->buffer->max) { //buffer full
+                                temperature_correction_face_stop_logging(state);
+                                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
+                                break;
+                            } else if (state->buffer.length >= TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES) { //only after n minutes
+                                if (temperature_correction_face_equilibrium_reached(&state->buffer)) { //temperature is stable: stop calculation
+                                    coeff_f = temperature_correction_face_calculate_coefficient_with_linear_regression(&state->buffer, TEMPERATURE_CORRECTION_CALCULATION_IGNORE_START_MINUTES, TEMPERATURE_CORRECTION_CALCULATION_END_TEMP_DELTA);
                                     state->coefficient = coeff_f; //save new coefficient
-                                    watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
-                                    watch_clear_indicator(WATCH_INDICATOR_BELL); 
-                                    state->bell_shown = false;
-                                    state->mode = temperature_correction_waiting;
+                                    temperature_correction_face_stop_logging(state);
                                     state->tick_show_real_temperature = 0; //display coefficient
                                 }
                             }
@@ -344,15 +372,13 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                 case temperature_correction_waiting: // start logging
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
-                    temperature_correction_face_init_rolling_buffers(state);
+                    temperature_correction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
+                    temperature_correction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
                     state->mode = temperature_correction_running;
                     break;
-                case temperature_correction_coefficient:
+                case temperature_correction_coefficient: //falltrough
                 case temperature_correction_running: // stop logging
-                    watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
-                    watch_clear_indicator(WATCH_INDICATOR_BELL); 
-                    state->bell_shown = false;
-                    state->mode = temperature_correction_waiting;
+                    temperature_correction_face_stop_logging(state);
                     break;
                 case temperature_correction_setting:
                     temperature_correction_face_advance_settings(state, true);
@@ -362,23 +388,20 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_ALARM_LONG_PRESS:
             switch (state->mode) {
-                case temperature_correction_waiting: 
-                    // start coefficient calculation
+                case temperature_correction_waiting: // start coefficient calculation
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
-                    temperature_correction_face_init_rolling_buffer(&state->buffer, state->buffer_size);          
-                    state->temperature_start = movement_get_temperature();
-                    state->delta = 0;
+                    temperature_correction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX);          
                     state->mode = temperature_correction_coefficient;
                     break;
-                case temperature_correction_running: 
+                case temperature_correction_coefficient: //fallthrough
+                case temperature_correction_running: // stop logging
+                    temperature_correction_face_stop_logging(state);
                     break;
                 case temperature_correction_setting:
                     temperature_correction_face_advance_settings(state, false);
                     temperature_correction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
                     break;
-                case temperature_correction_coefficient:
-                     break;
             }
             break;
         case EVENT_TIMEOUT:
