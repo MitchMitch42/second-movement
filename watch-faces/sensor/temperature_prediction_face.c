@@ -32,9 +32,10 @@
 #define TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE 60
 #define TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT 30
 
-//int debug_index = -1;
-//float debug_data[] = {31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
+//int debug_index = 0;
+//float debug_data[] = {31.5, 31.5, 31.5, 31.5, 31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
 //float debug_data[] = { 15.7, 15.6, 15.6, 15.6, 15.6, 15.6, 15.5, 15.5, 15.5, 15.5, 15.5, 15.4, 15.4, 15.4, 15.4, 15.3, 15.3, 15.3, 15.3, 15.2, 15.2, 15.2, 15.2, 15.2, 15.1, 15.1, 15.1, 15.1, 15.1, 15.0, 15.0, 15.0, 15.0, 14.9, 14.9, 14.9, 14.9, 14.9, 14.8, 14.8, 14.8, 14.8, 14.8, 14.7, 14.7, 14.7, 14.7, 14.7, 14.6, 14.6, 14.6, 14.6, 14.5, 14.5 };
+//float debug_data[] = {29.8, 29.5, 28.7, 27.9, 27.1, 26.5, 26.0, 25.5, 25.1, 24.7, 24.3, 24.0, 23.7, 23.5, 23.3, 23.1, 22.9, 22.7, 22.6, 22.5, 22.4, 22.3, 22.2, 22.1, 22.1, 22.0, 22.0, 21.9, 21.9, 21.9, 21.9, 21.8, 21.8, 21.8, 21.7, 21.7, 21.7, 21.7, 21.7, 21.7, 21.6, 21.6, 21.6, 21.6, 21.6 };
 
 /// @brief add a value to a rolling buffer
 /// @param buffer rolling buffer to update
@@ -52,7 +53,7 @@ static void temperature_correction_face_add_to_rolling_buffer(temperature_correc
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
 static float temperature_correction_face_calculate_coefficient(int delta, float temperature_start, float temperature_current, float temperature_end ) {
-    // =(1/G28)*LN((J28-I28)/(H28-I28))
+     // =(1/delta)*LN((Tstart-Tend)/(Tcurrent-Tend))
     return (1.0 / (float)delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
 }
 
@@ -95,10 +96,11 @@ static float temperature_correction_face_calculate_coefficient_with_linear_regre
 /// @param state face state containing temperature history and coefficient
 /// @return corrected end temperature based on buffered data
 static float temperature_correction_face_calculate_end_temperature(temperature_correction_state_t *state) {
+    //=(Tcurrent-Tstart*EXP(-k*time))/(1-EXP(-k*time))
     float temperature_current = state->buffer.data[state->buffer.head_index];
     int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
     float temperature_start = state->buffer.data[start_index];
-    float ex =  expf(-state->coefficient * (float)(state->buffer.length - 1)));
+    float ex = expf(-state->coefficient * (float)(state->buffer.length - 1)));
     return (temperature_current - temperature_start * ex) / (1 - ex);
 }
 
