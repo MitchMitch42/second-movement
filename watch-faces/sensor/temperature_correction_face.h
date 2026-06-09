@@ -35,7 +35,7 @@
 
 #define TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX 60
 #define TEMPERATURE_CORRECTION_AVERAGING_MAX 60
-#define TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES 5 //must be <= TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX
+#define TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES 5 //must be <= TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX. defines how long the temperature shall be constant to determine that equilibrium has been reached.
 #define TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD 0.1 //to trigger stop of coefficient calculation
 
 typedef enum {

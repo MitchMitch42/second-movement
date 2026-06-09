@@ -88,6 +88,21 @@ static float temperature_correction_face_calculate_average(temperature_correctio
     return sum / buffer->length;
 }
 
+/// @brief check if max-min of buffer is <= TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD
+static float temperature_correction_face_equilibrium_reached(temperature_correction_rolling_buffer_t *buffer) {
+    float min = buffer->data[0];
+    float max = buffer->data[0];
+    for (int i = 0; i < buffer->length; i++) {
+        if (buffer->data[i] < min) {
+            min = buffer->data[i]; // Update minimum
+        }
+        if (buffer->data[i] > max) {
+            max = buffer->data[i]; // Update maximum
+        }
+    }
+    return max - min <= TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD;
+} 
+
 /// @brief calculate corrected temperature and display it
 /// @param state face state used to compute and display the temperature
 /// @param display true if temperature shall be displayed
@@ -283,6 +298,13 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         else watch_clear_indicator(WATCH_INDICATOR_BELL);              
                         
                         state->delta++;
+
+                        if (state->delta == 300) { //skip first 5 minutes, until then heat dissipation is not stable
+                            state->temperature_start = movement_get_temperature();
+                            state->delta = 0; 
+                            todo: bool skipped=true
+                        }
+
                         float temperature_current = movement_get_temperature();
                         float temperature_end = state->temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
                         float coeff_f= temperature_correction_face_calculate_coefficient(state->delta, state->temperature_start, temperature_current, temperature_end);
@@ -290,8 +312,7 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                         if (state->last_second == 42) {//once a minute
                             temperature_correction_face_add_to_rolling_buffer(&state->buffer, temperature_current);
                             if (state->buffer.length == TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES) { //only after n minutes
-                                float average = temperature_correction_face_calculate_average(&state->buffer);
-                                if(abs(average - temperature_current) <= TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD) { //temperature is stable: stop calculation
+                                if(temperature_correction_face_equilibrium_reached(&state->buffer)) { //temperature is stable: stop calculation
                                     state->coefficient = coeff_f; //save new coefficient
                                     watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
                                     watch_clear_indicator(WATCH_INDICATOR_BELL); 
@@ -345,11 +366,9 @@ bool temperature_correction_face_loop(movement_event_t event, void *context) {
                     // start coefficient calculation
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
-
-                    //in mode temperature_correction_coefficient: save the last n values of the last n minutes in buffer (one sample per minute) to calc average temp of the last n minutes (n=TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES)
-                    temperature_correction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_CORRECTION_CALCULATION_MINIMUM_MINUTES);
-                    
+                    temperature_correction_face_init_rolling_buffer(&state->buffer, state->buffer_size);          
                     state->temperature_start = movement_get_temperature();
+                    state->delta = 0;
                     state->mode = temperature_correction_coefficient;
                     break;
                 case temperature_correction_running: 
