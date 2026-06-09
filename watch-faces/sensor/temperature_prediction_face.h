@@ -33,12 +33,12 @@
  *
  */
 
-#define TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX 60
-#define TEMPERATURE_CORRECTION_AVERAGING_MAX 60
-#define TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES 5 //defines how long the temperature shall be constant to determine that equilibrium has been reached.
-#define TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_TRESHOLD 0.1 //defines the maximum allowed temperature deviation to determine that equilibrium has been reached.
-#define TEMPERATURE_CORRECTION_CALCULATION_IGNORE_START_MINUTES 5 
-#define TEMPERATURE_CORRECTION_CALCULATION_END_TEMP_DELTA 2.0
+#define TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX 60
+#define TEMPERATURE_PREDICTION_AVERAGING_MAX 60
+#define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES 5 //defines how long the temperature shall be constant to determine that equilibrium has been reached.
+#define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD 0.1 //defines the maximum allowed temperature deviation to determine that equilibrium has been reached.
+#define TEMPERATURE_PREDICTION_CALCULATION_IGNORE_START_MINUTES 5 
+#define TEMPERATURE_PREDICTION_CALCULATION_END_TEMP_DELTA 2.0
 
 typedef enum {
     temperature_prediction_waiting,

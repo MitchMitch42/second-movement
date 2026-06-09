@@ -28,9 +28,9 @@
 #include "temperature_prediction_face.h"
 
 // Default initial values for the temperature correction face
-#define TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT 0.002F
-#define TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE 60
-#define TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT 30
+#define TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT 0.002F
+#define TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE 60
+#define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT 30
 
 //int debug_index = 0;
 //float debug_data[] = {31.5, 31.5, 31.5, 31.5, 31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
@@ -122,16 +122,16 @@ static float temperature_prediction_face_calculate_average(temperature_predictio
     return sum / buffer->length;
 }
 
-/// @brief check if max-min of the last n values of buffer is <= TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD, with n = TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES
+/// @brief check if max-min of the last n values of buffer is <= TEMPERATURE_PREDICTION_CALCULATION_TRESHOLD, with n = TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES
 static bool temperature_prediction_face_equilibrium_reached(temperature_prediction_rolling_buffer_t *buffer) {
-    //we know that buffer->length < buffer->max, and also that the buffer has at least TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES values
-    float min = buffer->data[buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES];
-    float max = buffer->data[buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES];
-    for (int i = buffer->length - TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES + 1; i < buffer->length; i++) {
+    //we know that buffer->length < buffer->max, and also that the buffer has at least TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES values
+    float min = buffer->data[buffer->length - TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES];
+    float max = buffer->data[buffer->length - TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES];
+    for (int i = buffer->length - TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES + 1; i < buffer->length; i++) {
         if (buffer->data[i] < min) min = buffer->data[i]; // Update minimum
         if (buffer->data[i] > max) max = buffer->data[i]; // Update maximum
     }
-    return max - min <= TEMPERATURE_CORRECTION_CALCULATION_TRESHOLD;
+    return max - min <= TEMPERATURE_PREDICTION_CALCULATION_TRESHOLD;
 } 
 
 /// @brief calculate corrected temperature and display it
@@ -242,12 +242,12 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
 
     switch (state->settings_state) {
         case 0:
-            if (forward) state->buffer_size = state->buffer_size + 1 > TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX ? 0 : state->buffer_size + 1;
-            else state->buffer_size = state->buffer_size - 1 < 2 ? TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX : state->buffer_size - 1;
+            if (forward) state->buffer_size = state->buffer_size + 1 > TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX ? 0 : state->buffer_size + 1;
+            else state->buffer_size = state->buffer_size - 1 < 2 ? TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX : state->buffer_size - 1;
             break;
         case 1:
-            if (forward) state->average_count = state->average_count + 1 > TEMPERATURE_CORRECTION_AVERAGING_MAX ? 0 : state->average_count + 1;
-            else state->average_count = state->average_count - 1 < 1 ? TEMPERATURE_CORRECTION_AVERAGING_MAX : state->average_count - 1;
+            if (forward) state->average_count = state->average_count + 1 > TEMPERATURE_PREDICTION_AVERAGING_MAX ? 0 : state->average_count + 1;
+            else state->average_count = state->average_count - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count - 1;
             break;
         case 2:
         case 3:
@@ -261,7 +261,7 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             if(forward && digit < 9) coeff = coeff + pow(10, abs((int)state->settings_state - 7));
             else if(!forward && digit > 0) coeff = coeff - pow(10, abs((int)state->settings_state - 7));
             state->coefficient = ((float)coeff) / 100000;
-            if(state->coefficient > 9) state->coefficient = TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT;
+            if(state->coefficient > 9) state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         default:
             break;
     }
@@ -275,12 +275,12 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         memset(*context_ptr, 0, sizeof(temperature_prediction_state_t));
 
         temperature_prediction_state_t *state = (temperature_prediction_state_t *)*context_ptr;       
-        state->buffer.data = malloc(TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX * sizeof(float));
-        state->calculated_temperatures.data = malloc(TEMPERATURE_CORRECTION_AVERAGING_MAX * sizeof(float));
+        state->buffer.data = malloc(TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX * sizeof(float));
+        state->calculated_temperatures.data = malloc(TEMPERATURE_PREDICTION_AVERAGING_MAX * sizeof(float));
         
-        state->coefficient = TEMPERATURE_CORRECTION_DEFAULT_COEFFICIENT;
-        state->buffer_size = TEMPERATURE_CORRECTION_DEFAULT_BUFFER_SIZE;
-        state->average_count = TEMPERATURE_CORRECTION_DEFAULT_AVERAGE_COUNT;
+        state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
+        state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
+        state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
     }
 }
 
@@ -375,9 +375,9 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                                 temperature_prediction_face_stop_logging(state);
                                 watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
                                 break;
-                            } else if (state->buffer.length >= TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES) { //only after n minutes
+                            } else if (state->buffer.length >= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES) { //only after n minutes
                                 if (temperature_prediction_face_equilibrium_reached(&state->buffer)) { //temperature is stable: stop calculation
-                                    state->coefficient = temperature_prediction_face_calculate_coefficient_with_linear_regression(&state->buffer, TEMPERATURE_CORRECTION_CALCULATION_EQUILIBRIUM_MINUTES, TEMPERATURE_CORRECTION_CALCULATION_IGNORE_START_MINUTES, TEMPERATURE_CORRECTION_CALCULATION_END_TEMP_DELTA);
+                                    state->coefficient = temperature_prediction_face_calculate_coefficient_with_linear_regression(&state->buffer, TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_IGNORE_START_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_END_TEMP_DELTA);
                                     //TODO: coefficient shall only have 5 decimal places, otherwise we have a different coeff than what we show and adjust
                                     temperature_prediction_face_stop_logging(state);
                                     temperature_prediction_face_display_coefficient(state->coefficient);
@@ -419,7 +419,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_waiting: // start coefficient calculation
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
-                    temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_CORRECTION_BUFFER_SIZE_MAX);          
+                    temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);          
                     tick_show_real_temperature = 0;
                     state->mode = temperature_prediction_coefficient;
                     break;
