@@ -81,7 +81,7 @@ static float temperature_prediction_face_calculate_coefficient_with_linear_regre
             sum_x += x;
             sum_y += y;
             sum_xx += x * x;
-            sum xy += x * y;
+            sum_xy += x * y;
             n++;
         }
     }
@@ -100,7 +100,7 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
     float temperature_current = state->buffer.data[state->buffer.head_index];
     int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
     float temperature_start = state->buffer.data[start_index];
-    float ex = expf(-state->coefficient * (float)(state->buffer.length - 1)));
+    float ex = expf(-state->coefficient * (float)(state->buffer.length - 1));
     return (temperature_current - temperature_start * ex) / (1 - ex);
 }
 
@@ -122,7 +122,7 @@ static float temperature_prediction_face_calculate_average(temperature_predictio
     return sum / buffer->length;
 }
 
-/// @brief check if max-min of the last n values of buffer is <= TEMPERATURE_PREDICTION_CALCULATION_TRESHOLD, with n = TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES
+/// @brief check if max-min of the last n values of buffer is <= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD, with n = TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES
 static bool temperature_prediction_face_equilibrium_reached(temperature_prediction_rolling_buffer_t *buffer) {
     //we know that buffer->length < buffer->max, and also that the buffer has at least TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES values
     float min = buffer->data[buffer->length - TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES];
@@ -131,7 +131,7 @@ static bool temperature_prediction_face_equilibrium_reached(temperature_predicti
         if (buffer->data[i] < min) min = buffer->data[i]; // Update minimum
         if (buffer->data[i] > max) max = buffer->data[i]; // Update maximum
     }
-    return max - min <= TEMPERATURE_PREDICTION_CALCULATION_TRESHOLD;
+    return max - min <= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD;
 } 
 
 /// @brief calculate corrected temperature and display it
@@ -140,7 +140,7 @@ static bool temperature_prediction_face_equilibrium_reached(temperature_predicti
 static void temperature_prediction_face_calculate_temperature_and_display(temperature_prediction_state_t *state, bool display) {
     if (state->buffer.length > 1) {
         float end_temperature = temperature_prediction_face_calculate_end_temperature(state);
-        temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
+        temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature, false);
         float average_temperature = temperature_prediction_face_calculate_average(&state->calculated_temperatures);
         if(display) temperature_prediction_face_show_temperature(average_temperature, movement_use_imperial_units());
     }
@@ -166,12 +166,13 @@ static void temperature_prediction_face_stop_logging(temperature_prediction_stat
 
 /// @brief show the coefficient at the bottom line
 static void temperature_prediction_face_display_coefficient(float coeff_f) {
+    char buf[8];
     int coeff = (int)(coeff_f * 100000 + 0.5); // 0.0013240584 -> 000132
     sprintf(buf, "%06d", coeff); 
     watch_display_text(WATCH_POSITION_BOTTOM, buf);
 }
 
-static void temperature_prediction_face_display_coefficient(temperature_prediction_state_t *state) {
+static void temperature_prediction_face_display_coefficient_data(temperature_prediction_state_t *state) {
     char buf[8];
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "      ", "      ");
 
@@ -306,7 +307,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_waiting:   
                     state->mode = temperature_prediction_show_coefficient;
                     state->show_state = 0;
-                    temperature_prediction_face_display_coefficient(state);
+                    temperature_prediction_face_display_coefficient_data(state);
                     break;  
                 case temperature_prediction_coefficient:     
                 case temperature_prediction_show_coefficient: 
@@ -335,7 +336,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     break;
                 case temperature_prediction_show_coefficient:
                     state->show_state++;
-                    temperature_prediction_face_display_coefficient(state);
+                    temperature_prediction_face_display_coefficient_data(state);
                     if (state->show_state > 2) state->mode = temperature_prediction_waiting;
                     break;
             }
@@ -371,7 +372,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
 
                         if (state->last_second == 42) {//once a minute (TODO: this is ugly)
                             temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature(), true);
-                            if (state->buffer->length == state->buffer->max) { //buffer full
+                            if (state->buffer.length == state->buffer.max) { //buffer full
                                 temperature_prediction_face_stop_logging(state);
                                 watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
                                 break;
@@ -399,7 +400,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
                     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
                     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
-                    tick_show_real_temperature = 0;
+                    state->tick_show_real_temperature = 0;
                     state->mode = temperature_prediction_running;
                     break;
                 case temperature_prediction_coefficient: //falltrough
@@ -420,7 +421,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
                     temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);          
-                    tick_show_real_temperature = 0;
+                    state->tick_show_real_temperature = 0;
                     state->mode = temperature_prediction_coefficient;
                     break;
                 case temperature_prediction_coefficient: //fallthrough
