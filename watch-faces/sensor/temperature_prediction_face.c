@@ -173,6 +173,7 @@ static void temperature_prediction_face_stop_logging(temperature_prediction_stat
 
 /// @brief show the coefficient at the bottom line
 static void temperature_prediction_face_display_coefficient(float coeff_f) {
+    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
     char buf[8];
     int coeff = (int)(coeff_f * 100000 + 0.5); // 0.0013240584 -> 000132
     sprintf(buf, "%06d", coeff); 
@@ -378,9 +379,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                         state->bell_shown = !state->bell_shown;
                         if(state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
                         else watch_clear_indicator(WATCH_INDICATOR_BELL);              
-                        
-                        //TODO: show something here, maybe precalculate coeff
-
+                    
                         if (state->last_second == 42) {//once a minute (TODO: this is ugly)
                             temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature(), true);
                             if (state->buffer.length == state->buffer.max) { //buffer full
@@ -397,6 +396,20 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                                 }
                             }
                         }
+
+                        if (state->tick_show_real_temperature == 0) {
+                            //just show some precalculation here, so it's not so empty...
+                            if (state->buffer.length < 2) {
+                                watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
+                            } else {
+                                float temperature_start = state->buffer.data[0];
+                                float temperature_current = state->buffer.data[state->buffer.head_index];
+                                float temperature_end = temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
+                                float coeff_f= temperature_prediction_face_calculate_coefficient((state->buffer.length - 1) * 60, temperature_start, temperature_current, temperature_end);
+                                temperature_prediction_face_display_coefficient(coeff_f);
+                            }
+                        }
+  
 
                         if (state->tick_show_real_temperature == 0) watch_clear_indicator(WATCH_INDICATOR_LAP);
                         else state->tick_show_real_temperature--;
