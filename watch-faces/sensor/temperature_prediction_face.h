@@ -46,6 +46,7 @@ typedef enum {
     temperature_prediction_setting,
     temperature_prediction_coefficient,
     temperature_prediction_show_coefficient,
+    temperature_prediction_show_buffer
 } temperature_prediction_mode_t;
 
 typedef struct {
@@ -72,6 +73,7 @@ typedef struct {
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation)
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
     uint8_t show_state;                                               // state index for showing the coefficient data after calculation
+    uint8_t show_buffer_state;                                        // state index for showing the buffer data after calculation
     uint8_t tick_show_real_temperature;                               // if > 0: show the real temperature the next few ticks
 } temperature_prediction_state_t;
 
