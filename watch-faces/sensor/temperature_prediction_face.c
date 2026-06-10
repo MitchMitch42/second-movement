@@ -202,8 +202,22 @@ static void temperature_prediction_face_display_coefficient_data(temperature_pre
             sprintf(buf, "%06d", debug_delta); 
             watch_display_text(WATCH_POSITION_BOTTOM, buf);
             break;
+        case 4:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "CO1", "C1");
+            int part1x = (int)(state->coefficient * 100000); 
+            sprintf(buf, "%06d", part1x); 
+            watch_display_text(WATCH_POSITION_BOTTOM, buf);
+            break;
+        case 5:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "CO2", "C2");
+            int part1 = (int)(state->coefficient * 100000); 
+            float remainder = (state->coefficient * 100000) - part1;
+            int part2 = (int)(remainder * 1000000); 
+            sprintf(buf, "%06d", part2); 
+            watch_display_text(WATCH_POSITION_BOTTOM, buf);
+            break;
         default:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP, "TCO", "TC");
+            watch_display_text_with_fallback(WATCH_POSITION_TOP, "PTE", "PT");
             break;
     }
 }
@@ -240,7 +254,7 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
                 watch_display_string(" ", state->settings_state + 2);
             break;
         default:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP, "TCO", "TC");
+            watch_display_text_with_fallback(WATCH_POSITION_TOP, "PTE", "PT");
             break;
     }
 }
@@ -307,7 +321,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
 
     switch (event.event_type) {
         case EVENT_ACTIVATE:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP, "TCO", "TC");
+            watch_display_text_with_fallback(WATCH_POSITION_TOP, "PTE", "PT");
             if(state->mode == temperature_prediction_setting) { 
                 state->mode = temperature_prediction_waiting;
             }
@@ -349,7 +363,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_show_coefficient:
                     state->show_state++;
                     temperature_prediction_face_display_coefficient_data(state);
-                    if (state->show_state > 3) state->mode = temperature_prediction_waiting;
+                    if (state->show_state > 5) state->mode = temperature_prediction_waiting;
                     break;
             }
             break;
