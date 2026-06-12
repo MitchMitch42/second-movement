@@ -50,7 +50,7 @@ static bool _temperature_logging_face_log_data(temperature_logging_state_t *logg
 }
 
 static void _temperature_logging_face_update_display(temperature_logging_state_t *logger_state, bool in_fahrenheit, bool clock_mode_24h) {
-    int8_t pos = (logger_state->data_points - 1 - logger_state->display_index) % TEMPERATURE_LOGGING_NUM_DATA_POINTS;
+    int16_t pos = (logger_state->data_points - 1 - logger_state->display_index) % TEMPERATURE_LOGGING_NUM_DATA_POINTS;
     char buf[7];
 
     watch_clear_indicator(WATCH_INDICATOR_24H);
