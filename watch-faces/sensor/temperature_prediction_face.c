@@ -316,10 +316,7 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
 /// @param state face state containing the selected setting
 /// @param forward true to increment, false to decrement
 static void temperature_prediction_face_advance_settings(temperature_prediction_state_t *state, bool forward) {
-    int coeff;
-    float decim;
-    int digit;
-
+    
     switch (state->settings_state) {
         case 0:
             if (state->algorithm_type == temperature_prediction_algorithm_fixed) state->algorithm_type = temperature_prediction_algorithm_block;
@@ -343,13 +340,11 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
         case 7:
         case 8:
         case 9:
-            coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132      
-            decim = (float)pow(10, abs((int)state->settings_state - 9) + 1); // for 6: 100
-            digit = (((float)coeff / decim) - ((int)((float)coeff / decim))) * 10;
-            if(forward && digit < 9) coeff = coeff + pow(10, abs((int)state->settings_state - 9));
-            else if(!forward && digit > 0) coeff = coeff - pow(10, abs((int)state->settings_state - 9));
+            int coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132
+            int step = 1;
+            for (int i = 0; i < 9 - state->settings_state; i++) step *= 10;
+            coeff += forward ? ((coeff / step) % 10 == 9 ? -9 * step : step) : ((coeff / step) % 10 == 0 ? 9 * step : -step);
             state->coefficient = ((float)coeff) / 100000;
-            if(state->coefficient > 9) state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
             break;
         default:
             break;
