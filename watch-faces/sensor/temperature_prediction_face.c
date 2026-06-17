@@ -255,24 +255,6 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
 
     switch (state->settings_state) {
         case 0:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BUF", "BU");
-            sprintf(buf, "%2d", state->buffer_size);
-            if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
-            else watch_display_text(WATCH_POSITION_MINUTES, "  ");
-            break;
-        case 1:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVG", "AV");
-            sprintf(buf, "%2d", state->average_count);
-            if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
-            else watch_display_text(WATCH_POSITION_MINUTES, "  ");
-            break;
-        case 2:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLK", "BL");
-            sprintf(buf, "%2d", state->block_count);
-            if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
-            else watch_display_text(WATCH_POSITION_MINUTES, "  ");
-            break;
-        case 3:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ALG", "AL");
             if (subsecond % 2) {
                 if (state->algorithm_type == temperature_prediction_algorithm_fixed) watch_display_text(WATCH_POSITION_BOTTOM, " Fixed");
@@ -280,6 +262,24 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             } else {
                 watch_display_text(WATCH_POSITION_BOTTOM, "      ");
             }
+            break;
+        case 1:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BUF", "BU");
+            sprintf(buf, "%2d", state->buffer_size);
+            if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
+            else watch_display_text(WATCH_POSITION_MINUTES, "  ");
+            break;
+        case 2:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVG", "AV");
+            sprintf(buf, "%2d", state->average_count);
+            if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
+            else watch_display_text(WATCH_POSITION_MINUTES, "  ");
+            break;
+        case 3:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLK", "BL");
+            sprintf(buf, "%2d", state->block_count);
+            if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
+            else watch_display_text(WATCH_POSITION_MINUTES, "  ");
             break;
         case 4:
         case 5:
@@ -308,20 +308,20 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
 
     switch (state->settings_state) {
         case 0:
+            if (state->algorithm_type == temperature_prediction_algorithm_fixed) state->algorithm_type = temperature_prediction_algorithm_block;
+            else state->algorithm_type = temperature_prediction_algorithm_fixed;
+            break;
+        case 1:
             if (forward) state->buffer_size = state->buffer_size + 1 > TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX ? 0 : state->buffer_size + 1;
             else state->buffer_size = state->buffer_size - 1 < 2 ? TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX : state->buffer_size - 1;
             break;
-        case 1:
+        case 2:
             if (forward) state->average_count = state->average_count + 1 > TEMPERATURE_PREDICTION_AVERAGING_MAX ? 0 : state->average_count + 1;
             else state->average_count = state->average_count - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count - 1;
             break;
-        case 2:
+        case 3:
             if (forward) state->block_count = state->block_count + 1 > 9 ? 1 : state->block_count + 1;
             else state->block_count = state->block_count - 1 < 1 ? 9 : state->block_count - 1;
-            break;
-        case 3:
-            if (state->algorithm_type == temperature_prediction_algorithm_fixed) state->algorithm_type = temperature_prediction_algorithm_block;
-            else state->algorithm_type = temperature_prediction_algorithm_fixed;
             break;
         case 4:
         case 5:
@@ -336,6 +336,7 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             else if(!forward && digit > 0) coeff = coeff - pow(10, abs((int)state->settings_state - 9));
             state->coefficient = ((float)coeff) / 100000;
             if(state->coefficient > 9) state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
+            break;
         default:
             break;
     }
