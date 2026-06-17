@@ -31,6 +31,7 @@
 #define TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT 0.002F
 #define TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE 60
 #define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT 30
+#define TEMPERATURE_PREDICTION_DEFAULT_BLOCK_COUNT 1
 
 //int debug_index = 0;
 //float debug_data[] = {31.5, 31.5, 31.5, 31.5, 31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
@@ -266,15 +267,21 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             else watch_display_text(WATCH_POSITION_MINUTES, "  ");
             break;
         case 2:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLK", "BL");
+            sprintf(buf, "%2d", state->block_count);
+            if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
+            else watch_display_text(WATCH_POSITION_MINUTES, "  ");
+            break;
         case 3:
         case 4:
         case 5:
         case 6:
         case 7:
+        case 8:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
             temperature_prediction_face_display_coefficient(state->coefficient);
             if (subsecond % 2) 
-                watch_display_string(" ", state->settings_state + 2);
+                watch_display_string(" ", state->settings_state + 1);
             break;
         default:
             watch_display_text_with_fallback(WATCH_POSITION_TOP, "PTE", "PT");
@@ -300,16 +307,20 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             else state->average_count = state->average_count - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count - 1;
             break;
         case 2:
+            if (forward) state->block_count = state->block_count + 1 > 9 ? 1 : state->block_count + 1;
+            else state->block_count = state->block_count - 1 < 1 ? 9 : state->block_count - 1;
+            break;
         case 3:
         case 4:
         case 5:
         case 6:
         case 7:
+        case 8:
             coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132      
-            decim = (float)pow(10, abs((int)state->settings_state - 7) + 1); // for 6: 100
+            decim = (float)pow(10, abs((int)state->settings_state - 8) + 1); // for 6: 100
             digit = (((float)coeff / decim) - ((int)((float)coeff / decim))) * 10;
-            if(forward && digit < 9) coeff = coeff + pow(10, abs((int)state->settings_state - 7));
-            else if(!forward && digit > 0) coeff = coeff - pow(10, abs((int)state->settings_state - 7));
+            if(forward && digit < 9) coeff = coeff + pow(10, abs((int)state->settings_state - 8));
+            else if(!forward && digit > 0) coeff = coeff - pow(10, abs((int)state->settings_state - 8));
             state->coefficient = ((float)coeff) / 100000;
             if(state->coefficient > 9) state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         default:
@@ -331,6 +342,8 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
         state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
+        state->block_count = TEMPERATURE_PREDICTION_DEFAULT_BLOCK_COUNT;
+        state->algorithm_type = temperature_prediction_algorithm_fixed;
     }
 }
 
@@ -385,7 +398,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state++;
                     temperature_prediction_face_display_settings(state, event.subsecond);
-                    if (state->settings_state > 7) state->mode = temperature_prediction_waiting;
+                    if (state->settings_state > 8) state->mode = temperature_prediction_waiting;
                     break;
                 case temperature_prediction_show_coefficient:
                     state->show_state++;
