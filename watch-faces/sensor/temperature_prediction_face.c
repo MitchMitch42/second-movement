@@ -246,6 +246,20 @@ static void temperature_prediction_face_display_buffer_data(temperature_predicti
     temperature_prediction_face_show_temperature(state->buffer.data[state->show_buffer_state], movement_use_imperial_units());
 }
 
+static uint8_t temperature_prediction_face_get_next_settings_state(temperature_prediction_state_t *state) {
+    uint8_t next_state = state->settings_state + 1;
+
+    if (state->algorithm_type == temperature_prediction_algorithm_fixed) {
+        // Fixed algorithm: skip block_count (3)
+        if (next_state == 3) next_state = 4;
+    } else {
+        // Block algorithm: skip buffer_size (1) and average_count (2)
+        if (next_state == 1 || next_state == 2) next_state = 3;
+    }
+
+    return next_state;
+}
+
 /// @brief display current settings on the watch face
 /// @param state face state containing settings values
 /// @param subsecond current subsecond value used for blink timing
@@ -410,7 +424,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     state->tick_show_real_temperature = 2;
                     break;
                 case temperature_prediction_setting: // flip through settings
-                    state->settings_state++;
+                    state->settings_state = temperature_prediction_face_get_next_settings_state(state);
                     temperature_prediction_face_display_settings(state, event.subsecond);
                     if (state->settings_state > 9) state->mode = temperature_prediction_waiting;
                     break;
