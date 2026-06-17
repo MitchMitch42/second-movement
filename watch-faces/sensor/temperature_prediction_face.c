@@ -273,15 +273,24 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             else watch_display_text(WATCH_POSITION_MINUTES, "  ");
             break;
         case 3:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ALG", "AL");
+            if (subsecond % 2) {
+                if (state->algorithm_type == temperature_prediction_algorithm_fixed) watch_display_text(WATCH_POSITION_BOTTOM, " Fixed");
+                else watch_display_text(WATCH_POSITION_BOTTOM, " Block");
+            } else {
+                watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+            }
+            break;
         case 4:
         case 5:
         case 6:
         case 7:
         case 8:
+        case 9:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
             temperature_prediction_face_display_coefficient(state->coefficient);
             if (subsecond % 2) 
-                watch_display_string(" ", state->settings_state + 1);
+                watch_display_string(" ", state->settings_state);
             break;
         default:
             watch_display_text_with_fallback(WATCH_POSITION_TOP, "PTE", "PT");
@@ -311,16 +320,20 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             else state->block_count = state->block_count - 1 < 1 ? 9 : state->block_count - 1;
             break;
         case 3:
+            if (state->algorithm_type == temperature_prediction_algorithm_fixed) state->algorithm_type = temperature_prediction_algorithm_block;
+            else state->algorithm_type = temperature_prediction_algorithm_fixed;
+            break;
         case 4:
         case 5:
         case 6:
         case 7:
         case 8:
+        case 9:
             coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132      
-            decim = (float)pow(10, abs((int)state->settings_state - 8) + 1); // for 6: 100
+            decim = (float)pow(10, abs((int)state->settings_state - 9) + 1); // for 6: 100
             digit = (((float)coeff / decim) - ((int)((float)coeff / decim))) * 10;
-            if(forward && digit < 9) coeff = coeff + pow(10, abs((int)state->settings_state - 8));
-            else if(!forward && digit > 0) coeff = coeff - pow(10, abs((int)state->settings_state - 8));
+            if(forward && digit < 9) coeff = coeff + pow(10, abs((int)state->settings_state - 9));
+            else if(!forward && digit > 0) coeff = coeff - pow(10, abs((int)state->settings_state - 9));
             state->coefficient = ((float)coeff) / 100000;
             if(state->coefficient > 9) state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         default:
@@ -398,7 +411,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state++;
                     temperature_prediction_face_display_settings(state, event.subsecond);
-                    if (state->settings_state > 8) state->mode = temperature_prediction_waiting;
+                    if (state->settings_state > 9) state->mode = temperature_prediction_waiting;
                     break;
                 case temperature_prediction_show_coefficient:
                     state->show_state++;
