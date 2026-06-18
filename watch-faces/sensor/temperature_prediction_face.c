@@ -110,7 +110,7 @@ static float temperature_correction_face_calculate_end_temperature_raw(int delta
 
 static float temperature_prediction_face_calculate_end_temperature2(temperature_prediction_rolling_buffer_t *buffer, uint8_t block_gap, float coefficient) {
     int16_t data_index = buffer->head_index;
-    uint8_t block_index = -1;
+    int8_t block_index = -1;
     uint16_t block_size = 0; //current block size
     float last_block_temperature = -999;
     float current_block_temperature = -999;
@@ -147,6 +147,7 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
     }
 
     //TODO: buffer size must be set to MAX when using algorithm2
+    
     return temperature_correction_face_calculate_end_temperature_raw(delta, temperature1, temperature2, coefficient);
 }
 
