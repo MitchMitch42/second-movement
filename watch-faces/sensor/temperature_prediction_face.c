@@ -109,22 +109,22 @@ static float temperature_correction_face_calculate_end_temperature_raw(int delta
 }
 
 static float temperature_prediction_face_calculate_end_temperature2(temperature_prediction_rolling_buffer_t *buffer, uint8_t block_gap, float coefficient) {
-    int16_t data_index = buffer->head_index;
+    int data_index = buffer->head_index;
     int8_t block_index = -1;
     uint16_t block_size = 0; //current block size
     float last_block_temperature = -999;
     float current_block_temperature = -999;
-    uint16_t middle_index_temperature1;
-    float temperature1; //middle temperature of newest complete block
-    float temperature2; //middle temperature of oldest complete block that gets taken into account
-    int delta; //delta in seconds between the two temperatures
+    int middle_index_temperature1 = -999;
+    float temperature1 = -999; //middle temperature of newest complete block
+    float temperature2 = -999; //middle temperature of oldest complete block that gets taken into account
+    int delta = 42; //delta in seconds between the two temperatures
 
     // Iterate backwards from newest entry to oldest, to find blocks
     // Each block is a group of consecutive same temperatures (with a tolerance -> 1111212222 is counted as two blocks, 1111 and 212222, because sensor sometimes does this)   
     for (uint16_t cnt = 0; cnt < buffer->length && block_index < block_gap + 2; cnt++) { 
         if (buffer->data[data_index] != current_block_temperature && buffer->data[data_index] != last_block_temperature) { //next block detected: block block_index complete
             if (block_index > 0) { //after first complete block
-                uint16_t middle_index = (data_index + (block_size + 1) / 2) % buffer->length; //index of the middle element of the block
+                int middle_index = (data_index + ((block_size + 1) / 2)) % buffer->length; //index of the middle element of the block
                 if (block_index == 1) {
                     temperature1 = current_block_temperature;
                     middle_index_temperature1 = middle_index;
@@ -142,12 +142,14 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
         data_index = data_index == 0 ? buffer->length - 1 : data_index - 1; //move index backwards with wrap around
     }
     
-    if (block_index < block_gap + 2) { //TODO: if buffer is not big enough, we might find 3 blocks but the oldest one might not be complete. So we can search for 4 blocks, to be sure. But at the beginning of the measurement, we only have 3 blocks. 
-        return 999; //not enough blocks found
-    }
+
+
+    // if (block_index < block_gap + 2) { //TODO: if buffer is not big enough, we might find 3 blocks but the oldest one might not be complete. So we can search for 4 blocks, to be sure. But at the beginning of the measurement, we only have 3 blocks. 
+    //     return 999; //not enough blocks found
+    // }
 
     //TODO: buffer size must be set to MAX when using algorithm2
-    
+
     return temperature_correction_face_calculate_end_temperature_raw(delta, temperature1, temperature2, coefficient);
 }
 
