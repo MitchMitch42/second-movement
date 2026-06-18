@@ -31,7 +31,7 @@
 #define TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT 0.002F
 #define TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE 60
 #define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT 30
-#define TEMPERATURE_PREDICTION_DEFAULT_BLOCK_COUNT 1
+#define TEMPERATURE_PREDICTION_DEFAULT_BLOCK_GAP 1
 
 //int debug_index = 0;
 //float debug_data[] = {31.5, 31.5, 31.5, 31.5, 31.5, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.4, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.3, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2, 31.2};
@@ -101,15 +101,65 @@ static float temperature_prediction_face_calculate_coefficient_with_linear_regre
 }
 
 /// @brief calculate end temperature using Newton's law of cooling
-/// @param state face state containing temperature history and coefficient
-/// @return corrected end temperature based on buffered data
-static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_state_t *state) {
+/// @param delta time difference between Tstart and Tcurrent in seconds
+static float temperature_correction_face_calculate_end_temperature_raw(int delta, float temperature_current, float temperature_start, float coefficient) {
     //=(Tcurrent-Tstart*EXP(-k*time))/(1-EXP(-k*time))
-    float temperature_current = state->buffer.data[state->buffer.head_index];
-    int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
-    float temperature_start = state->buffer.data[start_index];
-    float ex = expf(-state->coefficient * (float)(state->buffer.length - 1));
+    float ex =  expf(-coefficient * (float)delta);
     return (temperature_current - temperature_start * ex) / (1 - ex);
+}
+
+static float temperature_prediction_face_calculate_end_temperature2(temperature_prediction_rolling_buffer_t *buffer, uint8_t block_gap, float coefficient) {
+    int16_t data_index = buffer->head_index;
+    uint8_t block_index = -1;
+    uint16_t block_size = 0; //current block size
+    float last_block_temperature = -999;
+    float current_block_temperature = -999;
+    uint16_t middle_index_temperature1;
+    float temperature1; //middle temperature of newest complete block
+    float temperature2; //middle temperature of oldest complete block that gets taken into account
+    int delta; //delta in seconds between the two temperatures
+
+    // Iterate backwards from newest entry to oldest, to find blocks
+    // Each block is a group of consecutive same temperatures (with a tolerance -> 1111212222 is counted as two blocks, 1111 and 212222, because sensor sometimes does this)   
+    for (uint16_t cnt = 0; cnt < buffer->length && block_index < block_gap + 2; cnt++) { 
+        if (buffer->data[data_index] != current_block_temperature && buffer->data[data_index] != last_block_temperature) { //next block detected: block block_index complete
+            if (block_index > 0) { //after first complete block
+                uint16_t middle_index = (data_index + (block_size + 1) / 2) % buffer->length; //index of the middle element of the block
+                if (block_index == 1) {
+                    temperature1 = current_block_temperature;
+                    middle_index_temperature1 = middle_index;
+                } else {
+                    temperature2 = current_block_temperature;
+                    delta = ((int)middle_index_temperature1 - (int)middle_index) % buffer->length;
+                }
+            }       
+            block_index++;
+            block_size = 0;
+            last_block_temperature = current_block_temperature;
+            current_block_temperature = buffer->data[data_index];
+        }     
+        block_size++;
+        data_index = data_index == 0 ? buffer->length - 1 : data_index - 1; //move index backwards with wrap around
+    }
+    
+    if (block_index < block_gap + 2) { //TODO: if buffer is not big enough, we might find 3 blocks but the oldest one might not be complete. So we can search for 4 blocks, to be sure. But at the beginning of the measurement, we only have 3 blocks. 
+        return 999; //not enough blocks found
+    }
+
+    //TODO: buffer size must be set to MAX when using algorithm2
+    return temperature_correction_face_calculate_end_temperature_raw(delta, temperature1, temperature2, coefficient);
+}
+
+/// @brief calculate end temperature using Newton's law of cooling
+static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_state_t *state) {
+    if (state->algorithm_type == temperature_prediction_algorithm_block) {
+        return temperature_prediction_face_calculate_end_temperature2(&state->buffer, state->block_gap, state->coefficient);
+    } else {
+        float temperature_current = state->buffer.data[state->buffer.head_index];
+        int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
+        float temperature_start = state->buffer.data[start_index];
+        return temperature_correction_face_calculate_end_temperature_raw(state->buffer.length - 1, temperature_current, temperature_start, state->coefficient);
+    }
 }
 
 /// @brief display a temperature
@@ -291,7 +341,7 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             break;
         case 3:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLK", "BL");
-            sprintf(buf, "%2d", state->block_count);
+            sprintf(buf, "%2d", state->block_gap);
             if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
             else watch_display_text(WATCH_POSITION_MINUTES, "  ");
             break;
@@ -331,8 +381,8 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             else state->average_count = state->average_count - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count - 1;
             break;
         case 3:
-            if (forward) state->block_count = state->block_count + 1 > 9 ? 1 : state->block_count + 1;
-            else state->block_count = state->block_count - 1 < 1 ? 9 : state->block_count - 1;
+            if (forward) state->block_gap = state->block_gap + 1 > 9 ? 1 : state->block_gap + 1;
+            else state->block_gap = state->block_gap - 1 < 1 ? 9 : state->block_gap - 1;
             break;
         case 4:
         case 5:
@@ -340,6 +390,7 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
         case 7:
         case 8:
         case 9:
+            //set coefficient, increasing or decreasing one digit at a time, with wrap-around
             int coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132
             int step = 1;
             for (int i = 0; i < 9 - state->settings_state; i++) step *= 10;
@@ -365,7 +416,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
         state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
-        state->block_count = TEMPERATURE_PREDICTION_DEFAULT_BLOCK_COUNT;
+        state->block_gap = TEMPERATURE_PREDICTION_DEFAULT_BLOCK_GAP;
         state->algorithm_type = temperature_prediction_algorithm_fixed;
     }
 }

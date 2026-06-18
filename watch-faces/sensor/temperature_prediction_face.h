@@ -76,7 +76,7 @@ typedef struct {
     int average_count;                                               // number of calculated end temperatures to average
 
     //settings for correction algorithm 2: Tstart is the middle temperature of the last block, Tcurrent is the middle tempeprature of the current block
-    int block_count;                                                 // how many blocks between Tstart and Tcurrent (minimum 1)
+    int block_gap;                                                 // how many blocks between Tstart and Tcurrent (minimum 1)
 
     //for temp logging and coefficient calculation
     uint32_t last_second;                                             // last RTC second used for timed sampling
