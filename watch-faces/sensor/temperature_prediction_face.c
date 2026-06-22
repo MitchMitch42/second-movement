@@ -235,6 +235,15 @@ static void temperature_prediction_face_stop_logging(temperature_prediction_stat
     state->mode = temperature_prediction_waiting;
 }
 
+static void temperature_prediction_face_start_logging(temperature_prediction_state_t *state) {
+    state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
+    watch_set_indicator(WATCH_INDICATOR_SIGNAL);
+    temperature_prediction_face_init_rolling_buffer(&state->buffer, state->algorithm_type == temperature_prediction_algorithm_fixed ? state->buffer_size : TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);
+    temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->algorithm_type == temperature_prediction_algorithm_fixed ? state->average_count_fix : state->average_count_block);
+    state->tick_show_real_temperature = 0;
+    state->mode = temperature_prediction_running;
+}
+
 /// @brief clear the watch display
 static void temperature_prediction_face_clear_display(void) {
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "      ", "      ");
@@ -456,9 +465,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
     switch (event.event_type) {
         case EVENT_ACTIVATE:
             watch_display_text_with_fallback(WATCH_POSITION_TOP, "PTE", "PT");
-            if(state->mode == temperature_prediction_setting) { 
-                state->mode = temperature_prediction_waiting;
-            }
+            temperature_prediction_face_start_logging(state);
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
             break; //no light
@@ -576,12 +583,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
         case EVENT_ALARM_BUTTON_UP: 
             switch (state->mode) {
                 case temperature_prediction_waiting: // start logging
-                    state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
-                    watch_set_indicator(WATCH_INDICATOR_SIGNAL);
-                    temperature_prediction_face_init_rolling_buffer(&state->buffer, state->algorithm_type == temperature_prediction_algorithm_fixed ? state->buffer_size : TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);
-                    temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->algorithm_type == temperature_prediction_algorithm_fixed ? state->average_count_fix : state->average_count_block);
-                    state->tick_show_real_temperature = 0;
-                    state->mode = temperature_prediction_running;
+                    temperature_prediction_face_start_logging(state);
                     break;
                 case temperature_prediction_coefficient: //falltrough
                 case temperature_prediction_running: // stop logging
