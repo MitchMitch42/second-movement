@@ -109,13 +109,14 @@ static float temperature_correction_face_calculate_end_temperature_raw(int delta
     return (temperature_current - temperature_start * ex) / (1 - ex);
 }
 
-static float temperature_prediction_face_calculate_end_temperature2(temperature_prediction_rolling_buffer_t *buffer, uint8_t block_gap, float coefficient) {
+static float temperature_prediction_face_calculate_end_temperature2(temperature_prediction_rolling_buffer_t *buffer, uint8_t block_gap, float coefficient, bool display_block_size) {
     int data_index = buffer->head_index;
     int8_t block_index = -1;
     uint16_t block_size = 0; //current block size
     float last_block_temperature = -999;
     float current_block_temperature = -999;
     int middle_index_temperature1 = -999;
+    int block_size_temperature1 = 0;
     float temperature1 = -999; //middle temperature of newest complete block
     float temperature2 = -999; //middle temperature of oldest complete block that gets taken into account
     int delta = 42; //delta in seconds between the two temperatures
@@ -129,6 +130,7 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
                 if (block_index == 1) {
                     temperature1 = current_block_temperature;
                     middle_index_temperature1 = middle_index;
+                    block_size_temperature1 = block_size;
                 } else {
                     temperature2 = current_block_temperature;
                     delta = ((int)middle_index_temperature1 - (int)middle_index + buffer->length) % buffer->length;
@@ -144,7 +146,7 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
     }
     
     char buf[8];
-    sprintf(buf, "%2d", block_index + 1);
+    sprintf(buf, "%2d", display_block_size ? block_size_temperature1 : block_index + 1);
     watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
 
     if (block_index < 3) { //we need to find at least 4 blocks: first one (newest) is always incomplete, next is temp1, next is temp2, next is the oldest that defines the border of temp2
@@ -155,9 +157,9 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
 }
 
 /// @brief calculate end temperature using Newton's law of cooling
-static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_state_t *state) {
+static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_state_t *state, bool display_block_size) {
     if (state->algorithm_type == temperature_prediction_algorithm_block) {
-        return temperature_prediction_face_calculate_end_temperature2(&state->buffer, state->block_gap, state->coefficient);
+        return temperature_prediction_face_calculate_end_temperature2(&state->buffer, state->block_gap, state->coefficient, display_block_size);
     } else {
         float temperature_current = state->buffer.data[state->buffer.head_index];
         int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
@@ -201,7 +203,7 @@ static bool temperature_prediction_face_equilibrium_reached(temperature_predicti
 /// @param display true if temperature shall be displayed
 static void temperature_prediction_face_calculate_temperature_and_display(temperature_prediction_state_t *state, bool display) {
     if (state->buffer.length > 1) {
-        float end_temperature = temperature_prediction_face_calculate_end_temperature(state);
+        float end_temperature = temperature_prediction_face_calculate_end_temperature(state, !display);
         if (end_temperature == 999) {
             if (display) {
                 watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
