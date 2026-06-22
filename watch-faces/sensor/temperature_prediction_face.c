@@ -164,6 +164,12 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
         float temperature_current = state->buffer.data[state->buffer.head_index];
         int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
         float temperature_start = state->buffer.data[start_index];
+
+        debug_Tfirst = temperature_start;
+        debug_Tlast = temperature_current
+        debug_delta = (int)(state->temperature_current * 10000);
+        debug_Tend = temperature_current - temperature_start;
+
         return temperature_correction_face_calculate_end_temperature_raw(state->buffer.length - 1, temperature_current, temperature_start, state->coefficient);
     }
 }
@@ -496,7 +502,19 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     break;      
                 case temperature_prediction_coefficient: //fallthrough
                 case temperature_prediction_running: //show real temp for a few seconds
-                    temperature_prediction_face_show_temperature(movement_get_temperature(), movement_use_imperial_units());
+
+                    float tmp_f= movement_get_temperature(); //12.345
+                    int tmp = (int)tmp_f; //12
+                    float trunk_f = tmp_f - (float)tmp; //12.345 - 12.0 = 0.345
+                    int trunk_i = (int)(trunk_f * 100.0) //0.345 * 100 = 34.5 -> 34
+
+                    temperature_prediction_face_show_temperature(tmp_f, movement_use_imperial_units());
+
+                    char buf[8];
+                    sprintf(buf, "%02d", trunk_i); 
+                    watch_display_text(WATCH_POSITION_SECONDS, "  ");
+                    watch_display_text(WATCH_POSITION_SECONDS, buf);
+
                     watch_set_indicator(WATCH_INDICATOR_LAP);
                     state->tick_show_real_temperature = 2;
                     break;

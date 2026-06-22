@@ -70,7 +70,6 @@ typedef struct {
     temperature_prediction_algorithm_t algorithm_type;               // selected correction algorithm
     float coefficient;                                               // heat transfer coefficient used for correction
 
-
     //settings for correction algorithm 1: fixed delta between Tcurrent and Tstart, SMA over the last n calculated end temperatures
     int buffer_size;                                                 // delta between Tcurrent and Tstart
     int average_count_fix;                                           // number of calculated end temperatures to average
