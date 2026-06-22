@@ -132,7 +132,7 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
                     middle_index_temperature1 = middle_index;
                 } else {
                     temperature2 = current_block_temperature;
-                    delta = ((int)middle_index_temperature1 - (int)middle_index) % buffer->length;
+                    delta = ((int)middle_index_temperature1 - (int)middle_index + buffer->length) % buffer->length;
                 }
             }       
             block_index++;
@@ -144,16 +144,15 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
         data_index = data_index == 0 ? buffer->length - 1 : data_index - 1; //move index backwards with wrap around
     }
     
-
-
-    // if (block_index < block_gap + 2) { //TODO: if buffer is not big enough, we might find 3 blocks but the oldest one might not be complete. So we can search for 4 blocks, to be sure. But at the beginning of the measurement, we only have 3 blocks. 
-    //     return 999; //not enough blocks found
-    // }
-
     char buf[8];
     sprintf(buf, "%2d", block_size_temperature1);
     watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
 
+    //TODO: we can work wit 4 blocks even if block_gap > 1, we just decrease accurancy then but that is better than not showng anything
+    if (block_index < block_gap + 2) { //we need to find at least 4 blocks: first one (newest) is always incomplete, next is temp1, next is temp2, next is the oldest that defines the border of temp2
+       return 999; //not enough blocks found
+    }
+    
     return temperature_correction_face_calculate_end_temperature_raw(delta, temperature1, temperature2, coefficient);
 }
 
@@ -205,6 +204,13 @@ static bool temperature_prediction_face_equilibrium_reached(temperature_predicti
 static void temperature_prediction_face_calculate_temperature_and_display(temperature_prediction_state_t *state, bool display) {
     if (state->buffer.length > 1) {
         float end_temperature = temperature_prediction_face_calculate_end_temperature(state);
+        if (end_temperature == 999) {
+            if (display) {
+                watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
+            }
+            return;
+        }
+  
         temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature, false);
         float average_temperature = temperature_prediction_face_calculate_average(&state->calculated_temperatures);
         if(display) temperature_prediction_face_show_temperature(average_temperature, movement_use_imperial_units());
@@ -310,8 +316,8 @@ static uint8_t temperature_prediction_face_get_next_settings_state(temperature_p
         // Fixed algorithm: skip block_count (3)
         if (next_state == 3) next_state = 4;
     } else {
-        // Block algorithm: skip buffer_size (1) and average_count (2)
-        if (next_state == 1 || next_state == 2) next_state = 3;
+        // Block algorithm: skip buffer_size (1)
+        if (next_state == 1) next_state = 2;
     }
 
     return next_state;
@@ -380,11 +386,11 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             else state->algorithm_type = temperature_prediction_algorithm_fixed;
             break;
         case 1:
-            if (forward) state->buffer_size = state->buffer_size + 1 > TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX ? 0 : state->buffer_size + 1;
+            if (forward) state->buffer_size = state->buffer_size + 1 > TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX ? 2 : state->buffer_size + 1;
             else state->buffer_size = state->buffer_size - 1 < 2 ? TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX : state->buffer_size - 1;
             break;
         case 2:
-            if (forward) state->average_count = state->average_count + 1 > TEMPERATURE_PREDICTION_AVERAGING_MAX ? 0 : state->average_count + 1;
+            if (forward) state->average_count = state->average_count + 1 > TEMPERATURE_PREDICTION_AVERAGING_MAX ? 1 : state->average_count + 1;
             else state->average_count = state->average_count - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count - 1;
             break;
         case 3:
