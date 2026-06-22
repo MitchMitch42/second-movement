@@ -116,7 +116,6 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
     float last_block_temperature = -999;
     float current_block_temperature = -999;
     int middle_index_temperature1 = -999;
-    uint16_t block_size_temperature1 = 0; //block size of newest complete block
     float temperature1 = -999; //middle temperature of newest complete block
     float temperature2 = -999; //middle temperature of oldest complete block that gets taken into account
     int delta = 42; //delta in seconds between the two temperatures
@@ -129,7 +128,6 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
                 int middle_index = (data_index + ((block_size + 1) / 2)) % buffer->length; //index of the middle element of the block
                 if (block_index == 1) {
                     temperature1 = current_block_temperature;
-                    block_size_temperature1 = block_size;
                     middle_index_temperature1 = middle_index;
                 } else {
                     temperature2 = current_block_temperature;
@@ -146,11 +144,10 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
     }
     
     char buf[8];
-    sprintf(buf, "%2d", block_size_temperature1);
+    sprintf(buf, "%2d", block_index + 1);
     watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
 
-    //TODO: we can work wit 4 blocks even if block_gap > 1, we just decrease accurancy then but that is better than not showng anything
-    if (block_index < block_gap + 2) { //we need to find at least 4 blocks: first one (newest) is always incomplete, next is temp1, next is temp2, next is the oldest that defines the border of temp2
+    if (block_index < 3) { //we need to find at least 4 blocks: first one (newest) is always incomplete, next is temp1, next is temp2, next is the oldest that defines the border of temp2
        return 999; //not enough blocks found
     }
     
@@ -442,7 +439,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->average_count_fix = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT_FIX;
         state->average_count_block = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT_BLOCK;
         state->block_gap = TEMPERATURE_PREDICTION_DEFAULT_BLOCK_GAP;
-        state->algorithm_type = temperature_prediction_algorithm_fixed;
+        state->algorithm_type = temperature_prediction_algorithm_block;
     }
 }
 
