@@ -30,7 +30,8 @@
 // Default initial values for the temperature correction face
 #define TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT 0.002F
 #define TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE 60
-#define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT 30
+#define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT_FIX 30
+#define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT_BLOCK 1
 #define TEMPERATURE_PREDICTION_DEFAULT_BLOCK_GAP 1
 
 //int debug_index = 0;
@@ -313,11 +314,11 @@ static uint8_t temperature_prediction_face_get_next_settings_state(temperature_p
     uint8_t next_state = state->settings_state + 1;
 
     if (state->algorithm_type == temperature_prediction_algorithm_fixed) {
-        // Fixed algorithm: skip block_count (3)
-        if (next_state == 3) next_state = 4;
+        // Fixed algorithm: skip block_count (3) and average_count_block (4)
+        if (next_state == 3 || next_state == 4) next_state = 5;
     } else {
-        // Block algorithm: skip buffer_size (1)
-        if (next_state == 1) next_state = 2;
+        // Block algorithm: skip buffer_size (1) and average_count_fix (2)
+        if (next_state == 1 || next_state == 2) next_state = 3;
     }
 
     return next_state;
@@ -348,7 +349,7 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             break;
         case 2:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVG", "AV");
-            sprintf(buf, "%2d", state->average_count);
+            sprintf(buf, "%2d", state->average_count_fix);
             if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
             else watch_display_text(WATCH_POSITION_MINUTES, "  ");
             break;
@@ -359,15 +360,21 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             else watch_display_text(WATCH_POSITION_MINUTES, "  ");
             break;
         case 4:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVG", "AV");
+            sprintf(buf, "%2d", state->average_count_block);
+            if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
+            else watch_display_text(WATCH_POSITION_MINUTES, "  ");
+            break;
         case 5:
         case 6:
         case 7:
         case 8:
         case 9:
+        case 10:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
             temperature_prediction_face_display_coefficient(state->coefficient);
             if (subsecond % 2) 
-                watch_display_string(" ", state->settings_state);
+                watch_display_string(" ", state->settings_state - 1);
             break;
         default:
             watch_display_text_with_fallback(WATCH_POSITION_TOP, "PTE", "PT");
@@ -390,23 +397,27 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             else state->buffer_size = state->buffer_size - 1 < 2 ? TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX : state->buffer_size - 1;
             break;
         case 2:
-            if (forward) state->average_count = state->average_count + 1 > TEMPERATURE_PREDICTION_AVERAGING_MAX ? 1 : state->average_count + 1;
-            else state->average_count = state->average_count - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count - 1;
+            if (forward) state->average_count_fix = state->average_count_fix + 1 > TEMPERATURE_PREDICTION_AVERAGING_MAX ? 1 : state->average_count_fix + 1;
+            else state->average_count_fix = state->average_count_fix - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count_fix - 1;
             break;
         case 3:
             if (forward) state->block_gap = state->block_gap + 1 > 9 ? 1 : state->block_gap + 1;
             else state->block_gap = state->block_gap - 1 < 1 ? 9 : state->block_gap - 1;
             break;
         case 4:
+            if (forward) state->average_count_block = state->average_count_block + 1 > TEMPERATURE_PREDICTION_AVERAGING_MAX ? 1 : state->average_count_block + 1;
+            else state->average_count_block = state->average_count_block - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count_block - 1;
+            break;
         case 5:
         case 6:
         case 7:
         case 8:
         case 9:
+        case 10:
             //set coefficient, increasing or decreasing one digit at a time, with wrap-around
             int coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132
             int step = 1;
-            for (int i = 0; i < 9 - state->settings_state; i++) step *= 10;
+            for (int i = 0; i < 10 - state->settings_state; i++) step *= 10;
             coeff += forward ? ((coeff / step) % 10 == 9 ? -9 * step : step) : ((coeff / step) % 10 == 0 ? 9 * step : -step);
             state->coefficient = ((float)coeff) / 100000;
             break;
@@ -428,7 +439,8 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         
         state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
-        state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
+        state->average_count_fix = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT_FIX;
+        state->average_count_block = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT_BLOCK;
         state->block_gap = TEMPERATURE_PREDICTION_DEFAULT_BLOCK_GAP;
         state->algorithm_type = temperature_prediction_algorithm_fixed;
     }
@@ -568,7 +580,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
                     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
                     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->algorithm_type == temperature_prediction_algorithm_fixed ? state->buffer_size : TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);
-                    temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
+                    temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->algorithm_type == temperature_prediction_algorithm_fixed ? state->average_count_fix : state->average_count_block);
                     state->tick_show_real_temperature = 0;
                     state->mode = temperature_prediction_running;
                     break;

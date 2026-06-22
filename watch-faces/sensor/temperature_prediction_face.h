@@ -73,10 +73,11 @@ typedef struct {
 
     //settings for correction algorithm 1: fixed delta between Tcurrent and Tstart, SMA over the last n calculated end temperatures
     int buffer_size;                                                 // delta between Tcurrent and Tstart
-    int average_count;                                               // number of calculated end temperatures to average
+    int average_count_fix;                                           // number of calculated end temperatures to average
 
     //settings for correction algorithm 2: Tstart is the middle temperature of the last block, Tcurrent is the middle tempeprature of the current block
-    int block_gap;                                                 // how many blocks between Tstart and Tcurrent (minimum 1)
+    int block_gap;                                                   // how many blocks between Tstart and Tcurrent (minimum 1)
+    int average_count_block;                                         // number of calculated end temperatures to average
 
     //for temp logging and coefficient calculation
     uint32_t last_second;                                             // last RTC second used for timed sampling
