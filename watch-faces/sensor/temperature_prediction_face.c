@@ -113,7 +113,6 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
     int data_index = buffer->head_index;
     int8_t block_index = -1;
     uint16_t block_size = 0; //current block size
-    float last_block_temperature = -999;
     float current_block_temperature = -999;
     int middle_index_temperature1 = -999;
     int block_size_temperature1 = 0;
@@ -138,7 +137,6 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
             }       
             block_index++;
             block_size = 0;
-            last_block_temperature = current_block_temperature;
             current_block_temperature = buffer->data[data_index];
         }     
         block_size++;
@@ -149,8 +147,12 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
     sprintf(buf, "%2d", display_block_size ? block_size_temperature1 : block_index + 1);
     watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
 
-    if (block_index < 3) { //we need to find at least 4 blocks: first one (newest) is always incomplete, next is temp1, next is temp2, next is the oldest that defines the border of temp2
-       return 999; //not enough blocks found
+    if (block_index == 2) {
+         //estimation with only one complete block, assuming that the next block has the same size
+        temperature2 = current_block_temperature; //TODO: actually this can vary, better save and use first temperature of block2. better even: current_block_temperature should be set only once for each block!
+        delta = block_size_temperature1;
+    } else if (block_index < 3) { //we need to find at least 4 blocks: first one (newest) is always incomplete, next is temp1, next is temp2, next is the oldest that defines the border of temp2
+        return 999; //not enough blocks found
     }
     
     return temperature_correction_face_calculate_end_temperature_raw(delta, temperature1, temperature2, coefficient);
