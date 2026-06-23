@@ -114,6 +114,7 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
     int8_t block_index = -1;
     uint16_t block_size = 0; //current block size
     float current_block_temperature = -999;
+    float last_block_temperature = -999;
     int middle_index_temperature1 = -999;
     int block_size_temperature1 = 0;
     float temperature1 = -999; //middle temperature of newest complete block
@@ -137,6 +138,7 @@ static float temperature_prediction_face_calculate_end_temperature2(temperature_
             }       
             block_index++;
             block_size = 0;
+            last_block_temperature = current_block_temperature;
             current_block_temperature = buffer->data[data_index];
         }     
         block_size++;
@@ -168,8 +170,8 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
         float temperature_start = state->buffer.data[start_index];
 
         debug_Tfirst = temperature_start;
-        debug_Tlast = temperature_current
-        debug_delta = (int)(state->temperature_current * 10000);
+        debug_Tlast = temperature_current;
+        debug_delta = (int)(temperature_current * 10000);
         debug_Tend = temperature_current - temperature_start;
 
         return temperature_correction_face_calculate_end_temperature_raw(state->buffer.length - 1, temperature_current, temperature_start, state->coefficient);
@@ -212,16 +214,15 @@ static bool temperature_prediction_face_equilibrium_reached(temperature_predicti
 static void temperature_prediction_face_calculate_temperature_and_display(temperature_prediction_state_t *state, bool display) {
     if (state->buffer.length > 1) {
         float end_temperature = temperature_prediction_face_calculate_end_temperature(state, !display);
-        if (end_temperature == 999) {
-            if (display) {
-                watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
-            }
+        if (end_temperature != 999) {
+            temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature, false);
+            float average_temperature = temperature_prediction_face_calculate_average(&state->calculated_temperatures);
+            if(display) temperature_prediction_face_show_temperature(average_temperature, movement_use_imperial_units());
             return;
         }
-  
-        temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature, false);
-        float average_temperature = temperature_prediction_face_calculate_average(&state->calculated_temperatures);
-        if(display) temperature_prediction_face_show_temperature(average_temperature, movement_use_imperial_units());
+    }
+    if (display) {
+        watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
     }
 }
 
@@ -508,7 +509,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     float tmp_f= movement_get_temperature(); //12.345
                     int tmp = (int)tmp_f; //12
                     float trunk_f = tmp_f - (float)tmp; //12.345 - 12.0 = 0.345
-                    int trunk_i = (int)(trunk_f * 100.0) //0.345 * 100 = 34.5 -> 34
+                    int trunk_i = (int)(trunk_f * 100.0); //0.345 * 100 = 34.5 -> 34
 
                     temperature_prediction_face_show_temperature(tmp_f, movement_use_imperial_units());
 
