@@ -210,12 +210,12 @@ static void temperature_prediction_face_calculate_temperature_and_display(temper
         if (end_temperature != 999) {
             temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
             float average_temperature = temperature_prediction_face_calculate_average(&state->calculated_temperatures);
-            if(display) temperature_prediction_face_show_temperature(average_temperature);
+            if(display) state->temperature_to_show_bottom = average_temperature;
             return;
         }
     }
     if (display) {
-        watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
+        state->temperature_to_show_bottom = -999; //show CALC
     }
 }
 
@@ -244,6 +244,9 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->algorithm_type == temperature_prediction_algorithm_fixed ? state->average_count_fix : state->average_count_block);
     state->tick_show_real_temperature = 0;
     state->mode = temperature_prediction_running;
+    state->temperature_to_show_bottom = -999;
+    state->additional_info_to_show_top_right = 0;
+    temperature_prediction_face_update_display();
 }
 
 /// @brief clear the watch display
@@ -453,11 +456,14 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
     }
     watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
 
-    // if (state->temperature_to_show_bottom == -999) {
-    //     watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
-    // } else {
-    //     temperature_prediction_face_show_temperature(state->temperature_to_show_bottom);
-    // }
+    //show temperature at bottom
+    if (state->mode == temperature_prediction_running) {
+        if (state->temperature_to_show_bottom == -999) {
+            watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
+        } else {
+            temperature_prediction_face_show_temperature(state->temperature_to_show_bottom);
+        }
+    }
 }
 
 void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context_ptr) {
@@ -524,19 +530,20 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_running: //show real temp for a few seconds
 
                     float tmp_f= movement_get_temperature(); //12.345
-                    int tmp = (int)tmp_f; //12
-                    float trunk_f = tmp_f - (float)tmp; //12.345 - 12.0 = 0.345
-                    int trunk_i = (int)(trunk_f * 100.0); //0.345 * 100 = 34.5 -> 34
+                    // int tmp = (int)tmp_f; //12
+                    // float trunk_f = tmp_f - (float)tmp; //12.345 - 12.0 = 0.345
+                    // int trunk_i = (int)(trunk_f * 100.0); //0.345 * 100 = 34.5 -> 34
 
-                    temperature_prediction_face_show_temperature(tmp_f);
+                    state->temperature_to_show_bottom = tmp_f;
 
-                    char buf[8];
-                    sprintf(buf, "%02d", trunk_i); 
-                    watch_display_text(WATCH_POSITION_SECONDS, "  ");
-                    watch_display_text(WATCH_POSITION_SECONDS, buf);
+                    // char buf[8];
+                    // sprintf(buf, "%02d", trunk_i); 
+                    // watch_display_text(WATCH_POSITION_SECONDS, "  ");
+                    // watch_display_text(WATCH_POSITION_SECONDS, buf);
 
                     watch_set_indicator(WATCH_INDICATOR_LAP);
                     state->tick_show_real_temperature = 2;
+                    temperature_prediction_face_update_display();
                     break;
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state = temperature_prediction_face_get_next_settings_state(state);
