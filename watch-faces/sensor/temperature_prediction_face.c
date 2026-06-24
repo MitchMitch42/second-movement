@@ -307,7 +307,6 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
     state->mode = temperature_prediction_running;
     state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : -999;
-    state->additional_info_to_show_top_right = 0;
     temperature_prediction_face_update_display(state);
 }
 
