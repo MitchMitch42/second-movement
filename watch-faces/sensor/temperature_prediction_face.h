@@ -33,7 +33,7 @@
  *
  */
 
-#define TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX 60
+#define TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX 120 //todo: check how many kb this takes
 #define TEMPERATURE_PREDICTION_AVERAGING_MAX 60
 #define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES 5 //defines how long the temperature shall be constant to determine that equilibrium has been reached.
 #define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD 0.1 //defines the maximum allowed temperature deviation to determine that equilibrium has been reached.
@@ -49,6 +49,11 @@ typedef enum {
     temperature_prediction_show_buffer
 } temperature_prediction_mode_t;
 
+typedef enum {
+    temperature_prediction_algorithm_fixed, //algorithm 1: fixed delta between Tcurrent and Tstart, SMA over the last n calculated end temperatures
+    temperature_prediction_algorithm_block, //algorithm 2: Tstart is the middle temperature of the last block, Tcurrent is the middle tempeprature of the current block
+} temperature_prediction_algorithm_t;
+
 typedef struct {
     float *data;             // the data points
     int head_index;          // index of the most recent entry (-1 when empty)
@@ -58,23 +63,33 @@ typedef struct {
 
 typedef struct {
     // buffers
-    temperature_prediction_rolling_buffer_t buffer;                 // rolling buffer holding recent raw temperature samples
+    temperature_prediction_rolling_buffer_t buffer;                  // rolling buffer holding recent raw temperature samples
     temperature_prediction_rolling_buffer_t calculated_temperatures; // rolling buffer holding corrected temperatures
     
-    // settings for the correction algorithm using newton's law of cooling
+    // settings
+    temperature_prediction_algorithm_t algorithm_type;               // selected correction algorithm
     float coefficient;                                               // heat transfer coefficient used for correction
-    int buffer_size;                                                 // configured number of samples to retain in `buffer`
-    int average_count;                                               // number of corrected values to average for display   
-    
+
+    //settings for correction algorithm 1: fixed delta between Tcurrent and Tstart, SMA over the last n calculated end temperatures
+    int buffer_size;                                                 // delta between Tcurrent and Tstart
+    int average_count_fix;                                           // number of calculated end temperatures to average
+
+    //settings for correction algorithm 2: Tstart is the middle temperature of the last block, Tcurrent is the middle tempeprature of the current block
+    int block_gap;                                                   // how many blocks between Tstart and Tcurrent (minimum 1)
+    int average_count_block;                                         // number of calculated end temperatures to average
+
     //for temp logging and coefficient calculation
     uint32_t last_second;                                             // last RTC second used for timed sampling
 
     bool bell_shown;                                                  // whether the bell indicator is currently shown
-    temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation)
+    temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
     uint8_t show_state;                                               // state index for showing the coefficient data after calculation
     uint8_t show_buffer_state;                                        // state index for showing the buffer data after calculation
-    uint8_t tick_show_real_temperature;                               // if > 0: show the real temperature the next few ticks
+    bool show_real_temperature;                                       // if true: show the raw temperature, not the calculated one
+    uint8_t additional_info_to_show_top_right;                   
+    float temperature_to_show_bottom;                                 //if -999: show CALC instead of temperature
+
 } temperature_prediction_state_t;
 
 void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context_ptr);
