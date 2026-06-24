@@ -476,7 +476,7 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->algorithm_type == temperature_prediction_algorithm_fixed ? state->buffer_size : TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->algorithm_type == temperature_prediction_algorithm_fixed ? state->average_count_fix : state->average_count_block);
     state->mode = temperature_prediction_running;
-    state->temperature_to_show_bottom = -999;
+    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : -999;
     state->additional_info_to_show_top_right = 0;
     temperature_prediction_face_update_display(state);
 }
@@ -507,6 +507,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->average_count_block = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT_BLOCK;
         state->block_gap = TEMPERATURE_PREDICTION_DEFAULT_BLOCK_GAP;
         state->algorithm_type = temperature_prediction_algorithm_block;
+        state->show_real_temperature = true;
     }
 }
 
@@ -553,8 +554,8 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_coefficient: //fallthrough
                 case temperature_prediction_running: //toggle "show real temp"
                     state->show_real_temperature = !state->show_real_temperature;
-                    if(state->show_real_temperature) watch_set_indicator(WATCH_INDICATOR_LAP);
-                    else watch_clear_indicator(WATCH_INDICATOR_LAP);   
+                    if(state->show_real_temperature) watch_clear_indicator(WATCH_INDICATOR_LAP);
+                    else watch_set_indicator(WATCH_INDICATOR_LAP);   
                     break;
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state = temperature_prediction_face_get_next_settings_state(state);
