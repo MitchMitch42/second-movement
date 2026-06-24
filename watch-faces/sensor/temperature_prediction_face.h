@@ -45,7 +45,6 @@ typedef enum {
     temperature_prediction_running,
     temperature_prediction_setting,
     temperature_prediction_coefficient,
-    temperature_prediction_show_coefficient,
     temperature_prediction_show_buffer
 } temperature_prediction_mode_t;
 
@@ -84,7 +83,6 @@ typedef struct {
     bool bell_shown;                                                  // whether the bell indicator is currently shown
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
-    uint8_t show_state;                                               // state index for showing the coefficient data after calculation
     uint8_t show_buffer_state;                                        // state index for showing the buffer data after calculation
     bool show_real_temperature;                                       // if true: show the raw temperature, not the calculated one
     uint8_t additional_info_to_show_top_right;                   
