@@ -40,7 +40,6 @@
 //float debug_data[] = {29.8, 29.5, 28.7, 27.9, 27.1, 26.5, 26.0, 25.5, 25.1, 24.7, 24.3, 24.0, 23.7, 23.5, 23.3, 23.1, 22.9, 22.7, 22.6, 22.5, 22.4, 22.3, 22.2, 22.1, 22.1, 22.0, 22.0, 21.9, 21.9, 21.9, 21.9, 21.8, 21.8, 21.8, 21.7, 21.7, 21.7, 21.7, 21.7, 21.7, 21.6, 21.6, 21.6, 21.6, 21.6 };
 
 /// @brief reset a rolling buffer
-/// @param buffer rolling buffer to initialize
 /// @param usable_length maximum number of entries the buffer can hold
 static void temperature_prediction_face_init_rolling_buffer(temperature_prediction_rolling_buffer_t *buffer, int usable_length) {
     buffer->head_index = -1;
@@ -49,51 +48,10 @@ static void temperature_prediction_face_init_rolling_buffer(temperature_predicti
 }
 
 /// @brief add a value to a rolling buffer
-/// @param buffer rolling buffer to update
-/// @param value value to append
 static void temperature_prediction_face_add_to_rolling_buffer(temperature_prediction_rolling_buffer_t *buffer, float value) {
     buffer->head_index = (buffer->head_index + 1) % buffer->max;
     buffer->length = buffer->length + 1 < buffer->max ? buffer->length + 1 : buffer->max;
     buffer->data[buffer->head_index] = value;
-}
-
-/// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
-static float temperature_prediction_face_calculate_coefficient(int delta, float temperature_start, float temperature_current, float temperature_end ) {
-     // =(1/delta)*LN((Tstart-Tend)/(Tcurrent-Tend))
-    return (1.0 / (float)delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
-}
-
-/// @brief calculate heat transfer coefficient of Newtons law of cooling, using all points and performing a linear regression of the transformed logarithmic curve
-static float temperature_prediction_face_calculate_coefficient_with_linear_regression(temperature_prediction_rolling_buffer_t *buffer, int end_temp_cnt, int ignore_start_cnt, float ignore_delta_temp) {
-    //determine end temperature
-    float temp_end = 0;
-    for (int i = buffer->length - end_temp_cnt; i < buffer->length; i++) {
-        temp_end += buffer->data[i];
-    }
-    temp_end /= end_temp_cnt;
-
-    //calculate values for linear regression, formula is: -m=(nΣxy-ΣxΣy)/(mΣx²-(Σx)²)
-    float sum_x = 0;
-    float sum_y = 0;
-    float sum_xx = 0;
-    float sum_xy = 0;
-    int n = 0; 
-    for (int i = ignore_start_cnt; i < buffer->length; i++) {
-        if (fabs(buffer->data[i] - temp_end) <= ignore_delta_temp) {
-            break; //temperature is near end temperature, becoming unstable
-        } else {
-            float x = (i - ignore_start_cnt) * 60.0; //x = delta time in seconds
-            float y = logf(buffer->data[i] - temp_end); //y = ln(T - Tend)
-            sum_x += x;
-            sum_y += y;
-            sum_xx += x * x;
-            sum_xy += x * y;
-            n++;
-        }
-    }
-
-    if (n * sum_xx - sum_x * sum_x == 0) return 0;
-    else return (float)(-((n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)));
 }
 
 /// @brief calculate end temperature using Newton's law of cooling
@@ -104,7 +62,7 @@ static float temperature_correction_face_calculate_end_temperature_raw(int delta
     return (temperature_current - temperature_start * ex) / (1 - ex);
 }
 
-static float temperature_prediction_face_calculate_end_temperature2(temperature_prediction_state_t *state, temperature_prediction_rolling_buffer_t *buffer, uint8_t block_gap, float coefficient) { //TODO: finally remove display_block_size
+static float temperature_prediction_face_calculate_end_temperature2(temperature_prediction_state_t *state, temperature_prediction_rolling_buffer_t *buffer, uint8_t block_gap, float coefficient) {
     int data_index = buffer->head_index;
     int8_t block_index = -1;
     uint16_t block_size = 0; //current block size
@@ -185,6 +143,46 @@ static float temperature_prediction_face_calculate_temperature(temperature_predi
         }
     }
     return -999; //show CALC
+}
+
+
+/// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
+static float temperature_prediction_face_calculate_coefficient_simple(int delta, float temperature_start, float temperature_current, float temperature_end ) {
+     // =(1/delta)*LN((Tstart-Tend)/(Tcurrent-Tend))
+    return (1.0 / (float)delta) * logf((temperature_start - temperature_end) / (temperature_current - temperature_end));
+}
+
+/// @brief calculate heat transfer coefficient of Newtons law of cooling, using all points and performing a linear regression of the transformed logarithmic curve
+static float temperature_prediction_face_calculate_coefficient_with_linear_regression(temperature_prediction_rolling_buffer_t *buffer, int end_temp_cnt, int ignore_start_cnt, float ignore_delta_temp) {
+    //determine end temperature
+    float temp_end = 0;
+    for (int i = buffer->length - end_temp_cnt; i < buffer->length; i++) {
+        temp_end += buffer->data[i];
+    }
+    temp_end /= end_temp_cnt;
+
+    //calculate values for linear regression, formula is: -m=(nΣxy-ΣxΣy)/(mΣx²-(Σx)²)
+    float sum_x = 0;
+    float sum_y = 0;
+    float sum_xx = 0;
+    float sum_xy = 0;
+    int n = 0; 
+    for (int i = ignore_start_cnt; i < buffer->length; i++) {
+        if (fabs(buffer->data[i] - temp_end) <= ignore_delta_temp) {
+            break; //temperature is near end temperature, becoming unstable
+        } else {
+            float x = (i - ignore_start_cnt) * 60.0; //x = delta time in seconds
+            float y = logf(buffer->data[i] - temp_end); //y = ln(T - Tend)
+            sum_x += x;
+            sum_y += y;
+            sum_xx += x * x;
+            sum_xy += x * y;
+            n++;
+        }
+    }
+
+    if (n * sum_xx - sum_x * sum_x == 0) return 0;
+    else return (float)(-((n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)));
 }
 
 /// @brief check if max-min of the last n values of buffer is <= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD, with n = TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES
@@ -527,9 +525,10 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                         state->bell_shown = !state->bell_shown;
                         if(state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
                         else watch_clear_indicator(WATCH_INDICATOR_BELL);              
-                    
+   
+                        float temperature= movement_get_temperature();
                         if (state->last_second == 42) {//once a minute (TODO: this is ugly)
-                            temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
+                            temperature_prediction_face_add_to_rolling_buffer(&state->buffer, temperature);
                             if (state->buffer.length == state->buffer.max) { //buffer full
                                 temperature_prediction_face_stop_logging(state);
                                 watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
@@ -547,7 +546,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
 
                         //just show some precalculation here, so it's not so empty...
                         if (state->show_real_temperature) {
-                            state->temperature_to_show_bottom = movement_get_temperature(); //TODO: dont call movement_get_temperature twice in this block 
+                            state->temperature_to_show_bottom = temperature;
                         } else {
                             if (state->buffer.length < 2) {
                                 state->temperature_to_show_bottom = -999;
@@ -555,7 +554,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                                 float temperature_start = state->buffer.data[0];
                                 float temperature_current = state->buffer.data[state->buffer.head_index];
                                 float temperature_end = temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
-                                float coeff_f= temperature_prediction_face_calculate_coefficient((state->buffer.length - 1) * 60, temperature_start, temperature_current, temperature_end);
+                                float coeff_f= temperature_prediction_face_calculate_coefficient_simple((state->buffer.length - 1) * 60, temperature_start, temperature_current, temperature_end);
                                 temperature_prediction_face_display_coefficient(coeff_f);
                                 state->temperature_to_show_bottom = 0;
                             }
