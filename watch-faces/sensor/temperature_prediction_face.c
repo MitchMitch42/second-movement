@@ -80,10 +80,6 @@ static float temperature_prediction_face_calculate_coefficient_with_linear_regre
     int n = 0; 
     for (int i = ignore_start_cnt; i < buffer->length; i++) {
         if (fabs(buffer->data[i] - temp_end) <= ignore_delta_temp) {
-            debug_Tlast = buffer->data[i];
-            debug_delta = n - 1;
-            debug_Tfirst = buffer->data[ignore_start_cnt];
-            debug_Tend = temp_end;
             break; //temperature is near end temperature, becoming unstable
         } else {
             float x = (i - ignore_start_cnt) * 60.0; //x = delta time in seconds
@@ -242,7 +238,7 @@ static void temperature_prediction_face_display_buffer_data(temperature_predicti
     watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
 
     char buf2[8];
-    sprintf(buf2, "%06d", (int)(state->buffer.data[state->show_buffer_state] * 10000.0)
+    sprintf(buf2, "%06d", (int)(state->buffer.data[state->show_buffer_state] * 10000.0));
     watch_display_text(WATCH_POSITION_BOTTOM, buf2);
 }
 
