@@ -379,12 +379,12 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_running: //toggle "show real temp"
                     state->show_real_temperature = !state->show_real_temperature;
                     state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : -999;
-                    temperature_prediction_face_update_display();
+                    temperature_prediction_face_update_display(state);
                     break;
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state = temperature_prediction_face_get_next_settings_state(state);
                     temperature_prediction_face_display_settings(state, event.subsecond);
-                    if (state->settings_state > 9) {
+                    if (state->settings_state > 10) {
                         temperature_prediction_face_clear_display();
                         state->mode = temperature_prediction_waiting;
                     }
