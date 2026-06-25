@@ -303,9 +303,9 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
 }
 
 static void temperature_prediction_face_start_logging(temperature_prediction_state_t *state) {
-    state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
-    state->signal_shown = true;
-    watch_set_indicator(WATCH_INDICATOR_SIGNAL);
+    watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
+    state->signal_shown = false;
+    state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second     
     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
     state->mode = temperature_prediction_running;
