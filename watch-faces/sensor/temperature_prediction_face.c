@@ -302,19 +302,19 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
 
 static void temperature_prediction_face_start_logging(temperature_prediction_state_t *state) {
     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
+    state->signal_shown = true;
     watch_set_indicator(WATCH_INDICATOR_SIGNAL);
     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
     state->mode = temperature_prediction_running;
-    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : -999;
+    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : -999; 
     temperature_prediction_face_update_display(state);
 }
 
 /// @brief stop logging of temperatures
 static void temperature_prediction_face_stop_logging(temperature_prediction_state_t *state) {
     watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
-    watch_clear_indicator(WATCH_INDICATOR_BELL); 
-    state->bell_shown = false;
+    state->signal_shown = false;
     state->mode = temperature_prediction_waiting;
 }
 
@@ -403,9 +403,9 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_running: 
                     if (watch_rtc_get_date_time().unit.second != state->last_second) { 
                         state->last_second = watch_rtc_get_date_time().unit.second;                          
-                        state->bell_shown = !state->bell_shown;
-                        if(state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
-                        else watch_clear_indicator(WATCH_INDICATOR_BELL);               
+                        state->signal_shown = !state->signal_shown;
+                        if(state->signal_shown) watch_set_indicator(WATCH_INDICATOR_SIGNAL);
+                        else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);               
                         temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
                         state->temperature_to_show_bottom = temperature_prediction_face_calculate_end_temperature(state);                
                         if (state->show_real_temperature) {
@@ -420,9 +420,9 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_coefficient:
                      if (watch_rtc_get_date_time().unit.second != state->last_second) { 
                         state->last_second = watch_rtc_get_date_time().unit.second;                          
-                        state->bell_shown = !state->bell_shown;
-                        if(state->bell_shown) watch_set_indicator(WATCH_INDICATOR_BELL);
-                        else watch_clear_indicator(WATCH_INDICATOR_BELL);              
+                        state->signal_shown = !state->signal_shown;
+                        if(state->signal_shown) watch_set_indicator(WATCH_INDICATOR_SIGNAL);
+                        else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);              
    
                         float temperature= movement_get_temperature();
                         if (state->last_second == 42) {//once a minute (TODO: this is ugly)
@@ -486,7 +486,6 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
             switch (state->mode) {
                 case temperature_prediction_waiting: // start coefficient calculation
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
-                    watch_set_indicator(WATCH_INDICATOR_SIGNAL);
                     temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);          
                     state->mode = temperature_prediction_coefficient;
                     break;

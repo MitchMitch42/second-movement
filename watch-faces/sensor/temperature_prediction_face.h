@@ -68,7 +68,7 @@ typedef struct {
     //for temp logging and coefficient calculation
     uint32_t last_second;                                             // last RTC second used for timed sampling
 
-    bool bell_shown;                                                  // whether the bell indicator is currently shown
+    bool signal_shown;                                                // whether the signal indicator is currently shown
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
     uint8_t show_buffer_state;                                        // state index for showing the buffer data after calculation
