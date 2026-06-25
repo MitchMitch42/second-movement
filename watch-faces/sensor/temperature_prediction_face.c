@@ -136,7 +136,7 @@ static bool temperature_prediction_face_equilibrium_reached(temperature_predicti
 static void temperature_prediction_face_clear_display() {
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "      ", "      ");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEMP", "TE");
+    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEMP", "TE"); //todo: remove
 }
 
 /// @brief show the coefficient at the bottom line
@@ -159,7 +159,7 @@ static void temperature_prediction_face_show_temperature(float temperature_c ) {
 /// @brief display raw buffer samples
 //TODO: remove completely, this is only for debugging
 static void temperature_prediction_face_display_buffer_data(temperature_prediction_state_t *state) {
-    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BUF", "BF");
+    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BUFF", "BF");
 
     if (state->buffer.length == 0) {
         watch_display_text(WATCH_POSITION_BOTTOM, "no dat");
@@ -192,13 +192,13 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
         case 0:
             break;
         case 1:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BUF", "BU");
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BUFF", "BU");
             sprintf(buf, "%2d", state->buffer_size);
             if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
             else watch_display_text(WATCH_POSITION_MINUTES, "  ");
             break;
         case 2:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVG", "AV");
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVRG", "AV");
             sprintf(buf, "%2d", state->average_count);
             if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
             else watch_display_text(WATCH_POSITION_MINUTES, "  ");
@@ -213,7 +213,7 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
         case 8:
         case 9:
         case 10:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COEF", "CO");
             temperature_prediction_face_display_coefficient(state->coefficient);
             if (subsecond % 2) 
                 watch_display_string(" ", state->settings_state - 1);
@@ -272,10 +272,12 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
         } else {
            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ESTI", "ET");
         }
+    } else if(state->mode == temperature_prediction_coefficient) {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COEF", "CO");
     }
 
     //show additional info in top right position
-    if (state->mode == temperature_prediction_coefficient || state->mode == temperature_prediction_running) { 
+    if (state->mode == temperature_prediction_coefficient || (state->mode == temperature_prediction_running && !state->show_real_temperature)) { 
         //display buffer item count     
         sprintf(buf, "%2d", state->buffer.length);
     } else {
@@ -486,8 +488,11 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
             switch (state->mode) {
                 case temperature_prediction_waiting: // start coefficient calculation
                     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
-                    temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);          
+                    temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);    
+                    state->show_real_temperature = false;
+                    state->temperature_to_show_bottom = -999;
                     state->mode = temperature_prediction_coefficient;
+                    temperature_prediction_face_update_display(state);
                     break;
                 case temperature_prediction_coefficient: //fallthrough
                 case temperature_prediction_running: // stop logging
