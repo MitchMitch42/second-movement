@@ -314,7 +314,6 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
 static void temperature_prediction_face_stop_logging(temperature_prediction_state_t *state) {
     watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
     watch_clear_indicator(WATCH_INDICATOR_BELL); 
-    watch_clear_indicator(WATCH_INDICATOR_LAP);
     state->bell_shown = false;
     state->mode = temperature_prediction_waiting;
 }
@@ -379,8 +378,8 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_coefficient: //fallthrough
                 case temperature_prediction_running: //toggle "show real temp"
                     state->show_real_temperature = !state->show_real_temperature;
-                    if(state->show_real_temperature) watch_clear_indicator(WATCH_INDICATOR_LAP);
-                    else watch_set_indicator(WATCH_INDICATOR_LAP);   
+                    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : -999;
+                    temperature_prediction_face_update_display();
                     break;
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state = temperature_prediction_face_get_next_settings_state(state);
