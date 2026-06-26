@@ -132,13 +132,6 @@ static bool temperature_prediction_face_equilibrium_reached(temperature_predicti
     return max - min <= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD;
 }
 
-/// @brief clear the watch display
-static void temperature_prediction_face_clear_display() {
-    watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "      ", "      ");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEMP", "TE"); //todo: remove
-}
-
 /// @brief show the coefficient at the bottom line
 static void temperature_prediction_face_display_coefficient(float coeff_f) {
     watch_display_text(WATCH_POSITION_BOTTOM, "      ");
@@ -347,35 +340,34 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
     temperature_prediction_state_t *state = (temperature_prediction_state_t *)context;
 
     switch (event.event_type) {
-        case EVENT_ACTIVATE:
-            temperature_prediction_face_clear_display();    
+        case EVENT_ACTIVATE: 
             temperature_prediction_face_start_logging(state);
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
             break; //no light
         case EVENT_LIGHT_LONG_PRESS:
             switch (state->mode) {
-                case temperature_prediction_waiting: 
-                    state->mode = temperature_prediction_show_buffer;
-                    state->show_buffer_state = 0;
-                    temperature_prediction_face_display_buffer_data(state);
+                case temperature_prediction_coefficient:    
+                    break;              
+                case temperature_prediction_waiting: //fallthrough
+                case temperature_prediction_running: //enter settings
+                    temperature_prediction_face_stop_logging(state);
+                    state->mode = temperature_prediction_setting;
+                    state->settings_state = 1;
+                    temperature_prediction_face_display_settings(state, event.subsecond);
                     break;
-                case temperature_prediction_coefficient:     
-                case temperature_prediction_running:
-                    break;
-                case temperature_prediction_show_buffer:
-                case temperature_prediction_setting:
-                    temperature_prediction_face_clear_display();
-                    state->mode = temperature_prediction_waiting;
+                case temperature_prediction_show_buffer: //fallthrough
+                case temperature_prediction_setting: //exit settings
+                    temperature_prediction_face_start_logging(state);
                     break;
             }
             break;
         case EVENT_LIGHT_BUTTON_UP:     
             switch (state->mode) {
-                case temperature_prediction_waiting: // enter settings
-                    state->mode = temperature_prediction_setting;
-                    state->settings_state = 1;
-                    temperature_prediction_face_display_settings(state, event.subsecond);
+                case temperature_prediction_waiting: // enter buffer
+                    state->mode = temperature_prediction_show_buffer;
+                    state->show_buffer_state = 0;
+                    temperature_prediction_face_display_buffer_data(state);
                     break;      
                 case temperature_prediction_coefficient: //fallthrough
                 case temperature_prediction_running: //toggle "show real temp"
@@ -387,11 +379,10 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     state->settings_state = temperature_prediction_face_get_next_settings_state(state);
                     temperature_prediction_face_display_settings(state, event.subsecond);
                     if (state->settings_state > 10) {
-                        temperature_prediction_face_clear_display();
-                        state->mode = temperature_prediction_waiting;
+                        temperature_prediction_face_start_logging(state);
                     }
                     break;
-                case temperature_prediction_show_buffer:
+                case temperature_prediction_show_buffer: //flip through buffer
                     if (state->buffer.length > 0)  state->show_buffer_state = state->show_buffer_state - 1 < 0 ? state->buffer.length - 1 : state->show_buffer_state - 1;
                     temperature_prediction_face_display_buffer_data(state);                  
                     break;
@@ -470,7 +461,8 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_waiting: // start logging
                     temperature_prediction_face_start_logging(state);
                     break;
-                case temperature_prediction_coefficient: //falltrough
+                case temperature_prediction_coefficient:
+                    break;
                 case temperature_prediction_running: // stop logging
                     temperature_prediction_face_stop_logging(state);
                     break;
@@ -494,9 +486,10 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     state->mode = temperature_prediction_coefficient;
                     temperature_prediction_face_update_display(state);
                     break;
-                case temperature_prediction_coefficient: //fallthrough
-                case temperature_prediction_running: // stop logging
+                case temperature_prediction_coefficient: // stop logging
                     temperature_prediction_face_stop_logging(state);
+                    break;
+                case temperature_prediction_running: 
                     break;
                 case temperature_prediction_setting:
                     temperature_prediction_face_advance_settings(state, false);
