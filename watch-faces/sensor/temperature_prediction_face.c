@@ -68,6 +68,25 @@ static float temperature_correction_face_calculate_end_temperature_raw(int delta
     return (temperature_current - temperature_start * ex) / (1 - ex);
 }
 
+/// calculate end temperature with a closed-form least squares solution of Newton's law of cooling
+static float temperature_correction_face_calculate_end_temperature_least_square(temperature_prediction_rolling_buffer_t *buffer, float coefficient) {
+    const float alpha = expf(-coefficient); // dt = 1s
+    float numerator = 0.0f;
+    float denominator = 0.0f;
+    float e = 1.0f;
+    uint16_t index = (buffer->head_index + 1) % buffer->length;
+    const float t0 = buffer->data[index];
+    
+    for (uint16_t i = 0; i < buffer->length; i++) {
+        const float w = 1.0f - e;
+        numerator   += w * (buffer->data[index] - e * t0);
+        denominator += w * w;
+        e *= alpha;
+        index = (index + 1) % buffer->length;
+    }
+    return denominator <= 0.0f ? t0 : (numerator / denominator);
+}
+
 /// @brief calculate end temperature with fixed delta between Tcurrent and Tstart and SMA over the last n calculated end temperatures
 static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_state_t *state) {
     if (state->buffer.length > 1) {
