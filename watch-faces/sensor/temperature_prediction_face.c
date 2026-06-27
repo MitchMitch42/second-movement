@@ -230,6 +230,12 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             if (subsecond % 2) 
                 watch_display_string(" ", state->settings_state - 1);
             break;
+        case 11:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COEF", "CO");
+            watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
+            if (subsecond % 2) 
+                watch_display_text(WATCH_POSITION_SECONDS, state->start_coefficient_calculation ? " y" : " n");
+            break;
         default:
             break;
     }
@@ -269,6 +275,9 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             for (int i = 0; i < 10 - state->settings_state; i++) step *= 10;
             coeff += forward ? ((coeff / step) % 10 == 9 ? -9 * step : step) : ((coeff / step) % 10 == 0 ? 9 * step : -step);
             state->coefficient = ((float)coeff) / 100000;
+            break;
+        case 11:
+            state->start_coefficient_calculation = !state->start_coefficient_calculation;
             break;
         default:
             break;
@@ -314,14 +323,27 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
     }
 }
 
-static void temperature_prediction_face_start_logging(temperature_prediction_state_t *state) {
+/// @brief start coefficient calculation
+static void temperature_prediction_face_start_coefficient_calculation(temperature_prediction_state_t *state) { 
+    watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
+    state->signal_shown = false;
+    state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
+    temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);    
+    state->show_real_temperature = false;
+    state->temperature_to_show_bottom = -999;
+    state->mode = temperature_prediction_coefficient;
+    temperature_prediction_face_update_display(state);
+}
+
+/// @brief start logging of temperatures
+static void temperature_prediction_face_start_logging(temperature_prediction_state_t *state) { //todo: merge with temperature_prediction_face_start_coefficient_calculation
     watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
     state->signal_shown = false;
     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second     
     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
-    state->mode = temperature_prediction_running;
     state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : -999; 
+    state->mode = temperature_prediction_running;
     temperature_prediction_face_update_display(state);
 }
 
@@ -373,11 +395,16 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     temperature_prediction_face_stop_logging(state);
                     state->mode = temperature_prediction_setting;
                     state->settings_state = 1;
+                    state->start_coefficient_calculation = false;
                     temperature_prediction_face_display_settings(state, event.subsecond);
                     break;
                 case temperature_prediction_show_buffer: //fallthrough
                 case temperature_prediction_setting: //exit settings
-                    temperature_prediction_face_start_logging(state);
+                    if (state->start_coefficient_calculation) {
+                        temperature_prediction_face_start_coefficient_calculation(state);
+                    } else {
+                        temperature_prediction_face_start_logging(state);
+                    }
                     break;
             }
             break;
@@ -397,8 +424,12 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state = temperature_prediction_face_get_next_settings_state(state);
                     temperature_prediction_face_display_settings(state, event.subsecond);
-                    if (state->settings_state > 10) {
-                        temperature_prediction_face_start_logging(state);
+                    if (state->settings_state > 11) {
+                        if (state->start_coefficient_calculation) {
+                            temperature_prediction_face_start_coefficient_calculation(state);
+                        } else {
+                            temperature_prediction_face_start_logging(state);
+                        }
                     }
                     break;
                 case temperature_prediction_show_buffer: //flip through buffer
@@ -429,23 +460,15 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_ALARM_LONG_PRESS:
             switch (state->mode) {
-                case temperature_prediction_waiting: // start coefficient calculation
-                    state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
-                    temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);    
-                    state->show_real_temperature = false;
-                    state->temperature_to_show_bottom = -999;
-                    state->mode = temperature_prediction_coefficient;
-                    temperature_prediction_face_update_display(state);
-                    break;
                 case temperature_prediction_coefficient: // stop logging
                     temperature_prediction_face_stop_logging(state);
-                    break;
-                case temperature_prediction_running: 
                     break;
                 case temperature_prediction_setting:
                     temperature_prediction_face_advance_settings(state, false);
                     temperature_prediction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
                     break;
+                case temperature_prediction_waiting: 
+                case temperature_prediction_running: 
                 case temperature_prediction_show_buffer:
                     break;
             }
