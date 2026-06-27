@@ -468,8 +468,11 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     temperature_prediction_face_advance_settings(state, false);
                     temperature_prediction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
                     break;
-                case temperature_prediction_waiting: 
                 case temperature_prediction_running: 
+                    movement_set_use_imperial_units(!movement_use_imperial_units());
+                    temperature_prediction_face_update_display(state);
+                    break;
+                case temperature_prediction_waiting: 
                 case temperature_prediction_show_buffer:
                     break;
             }
