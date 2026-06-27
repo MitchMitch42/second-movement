@@ -310,7 +310,7 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
     //show temperature at bottom
     if (state->mode == temperature_prediction_running) {
         if (state->temperature_to_show_bottom == -999) {
-            watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
+            watch_display_text(WATCH_POSITION_BOTTOM, "      ");
         } else {
             temperature_prediction_face_display_temperature(state->temperature_to_show_bottom);
         }
@@ -339,6 +339,7 @@ static void temperature_prediction_face_start_coefficient_calculation(temperatur
 static void temperature_prediction_face_start_logging(temperature_prediction_state_t *state) { //todo: merge with temperature_prediction_face_start_coefficient_calculation
     watch_clear_indicator(WATCH_INDICATOR_SIGNAL); 
     state->signal_shown = false;
+    state->last_calculated_temperature = -999;
     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second     
     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
@@ -418,7 +419,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_coefficient: //fallthrough
                 case temperature_prediction_running: //toggle "show real temp"
                     state->show_real_temperature = !state->show_real_temperature;
-                    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : -999;
+                    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : state->last_calculated_temperature;
                     temperature_prediction_face_update_display(state);
                     break;
                 case temperature_prediction_setting: // flip through settings
@@ -485,10 +486,8 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                         if(state->signal_shown) watch_set_indicator(WATCH_INDICATOR_SIGNAL);
                         else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);               
                         temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
-                        state->temperature_to_show_bottom = temperature_prediction_face_calculate_end_temperature(state);                
-                        if (state->show_real_temperature) {
-                            state->temperature_to_show_bottom = state->buffer.data[state->buffer.head_index];
-                        }                      
+                        state->last_calculated_temperature = temperature_prediction_face_calculate_end_temperature(state);             
+                        state->temperature_to_show_bottom = state->show_real_temperature ? state->buffer.data[state->buffer.head_index] : state->last_calculated_temperature;                 
                         temperature_prediction_face_update_display(state);
                     }
                     break;

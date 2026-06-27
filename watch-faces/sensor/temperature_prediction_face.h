@@ -68,6 +68,8 @@ typedef struct {
 
     //for temp logging and coefficient calculation
     uint32_t last_second;                                             // last RTC second used for timed sampling
+    float last_calculated_temperature;              
+
 
     bool signal_shown;                                                // whether the signal indicator is currently shown
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
