@@ -90,7 +90,7 @@ static float temperature_correction_face_calculate_end_temperature_least_square(
 /// @brief calculate end temperature with fixed delta between Tcurrent and Tstart and SMA over the last n calculated end temperatures
 static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_state_t *state) {
     if(state->debug_use_alternative_algorithm) {
-        float end_temperature = temperature_correction_face_calculate_end_temperature_least_square(state, &state->buffer);
+        float end_temperature = temperature_correction_face_calculate_end_temperature_least_square(&state->buffer, state->coefficient);
         temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
         return temperature_prediction_face_calculate_average(&state->calculated_temperatures);
     }
@@ -294,7 +294,7 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             break;
         case 12:
             state->start_coefficient_calculation = !state->start_coefficient_calculation;
-            break
+            break;
         default:
             break;
     }
@@ -393,8 +393,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
 }
 
 void temperature_prediction_face_activate(void *context) {
-    temperature_prediction_state_t *state = (temperature_prediction_state_t *)context;
-    movement_request_tick_frequency(4); // we need to manually blink some pixels
+    movement_request_tick_frequency(4); // we need to blink in settings
 }
 
 bool temperature_prediction_face_loop(movement_event_t event, void *context) {
@@ -495,7 +494,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     break;
                 case temperature_prediction_running: 
                     if (state->debug) {
-                        state->debug_use_alternative_algorithm = !debug_use_alternative_algorithm;
+                        state->debug_use_alternative_algorithm = !state->debug_use_alternative_algorithm;
                     } else {
                         movement_set_use_imperial_units(!movement_use_imperial_units());
                         temperature_prediction_face_update_display(state, state->show_real_temperature ? movement_get_temperature() : state->last_calculated_temperature);
