@@ -222,7 +222,7 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             if (subsecond % 2) watch_display_text(WATCH_POSITION_MINUTES, buf);
             else watch_display_text(WATCH_POSITION_MINUTES, "  ");
             break;
-        case 3:
+        case 3: //TODO: remove
             break;
         case 4:
             break;
@@ -406,20 +406,43 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
             switch (state->mode) {
+                case temperature_prediction_running:
+                    if(state->debug) {
+                        temperature_prediction_face_start_logging(state); //restart logging for debug only! TODO: make restart availabe for normal user?
+                        break;
+                    }
                 case temperature_prediction_coefficient:              
                 case temperature_prediction_waiting:
-                case temperature_prediction_running:
                     movement_illuminate_led();
                     break;
-                case temperature_prediction_show_buffer:
-                case temperature_prediction_setting:
+                case temperature_prediction_setting: // flip through settings
+                    state->settings_state = temperature_prediction_face_get_next_settings_state(state);
+                    temperature_prediction_face_display_settings(state, event.subsecond);
+                    if (state->settings_state > 12) {
+                        if (state->start_coefficient_calculation) {
+                            temperature_prediction_face_start_coefficient_calculation(state);
+                        } else {
+                            if (state->debug) {
+                                state->mode = temperature_prediction_show_buffer;
+                                state->show_buffer_state = 0;
+                                temperature_prediction_face_display_buffer_data(state);
+                                break; 
+                            } else {
+                                temperature_prediction_face_start_logging(state);
+                            }
+                        }
+                    }
+                    break;
+                case temperature_prediction_show_buffer: //flip through buffer
+                    if (state->buffer.length > 0)  state->show_buffer_state = state->show_buffer_state - 1 < 0 ? state->buffer.length - 1 : state->show_buffer_state - 1;
+                    temperature_prediction_face_display_buffer_data(state);                  
                     break;
             }
             break;
         case EVENT_LIGHT_LONG_PRESS:
             switch (state->mode) {
                 case temperature_prediction_coefficient:    
-                    break;              
+                    if (!state->debug) break; //enable settings in coefficient for debug only
                 case temperature_prediction_waiting: //fallthrough
                 case temperature_prediction_running: //enter settings
                     temperature_prediction_face_stop_logging(state);
@@ -429,39 +452,15 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     temperature_prediction_face_display_settings(state, event.subsecond);
                     break;
                 case temperature_prediction_show_buffer: //fallthrough
+                    state->mode = temperature_prediction_waiting;
+                     watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+                    break;
                 case temperature_prediction_setting: //exit settings
                     if (state->start_coefficient_calculation) {
                         temperature_prediction_face_start_coefficient_calculation(state);
                     } else {
                         temperature_prediction_face_start_logging(state);
                     }
-                    break;
-            }
-            break;
-        case EVENT_LIGHT_BUTTON_UP:     
-            switch (state->mode) {
-                case temperature_prediction_waiting: // enter buffer
-                    state->mode = temperature_prediction_show_buffer;
-                    state->show_buffer_state = 0;
-                    temperature_prediction_face_display_buffer_data(state);
-                    break;      
-                case temperature_prediction_coefficient:
-                case temperature_prediction_running:
-                    break;
-                case temperature_prediction_setting: // flip through settings
-                    state->settings_state = temperature_prediction_face_get_next_settings_state(state);
-                    temperature_prediction_face_display_settings(state, event.subsecond);
-                    if (state->settings_state > 12) {
-                        if (state->start_coefficient_calculation) {
-                            temperature_prediction_face_start_coefficient_calculation(state);
-                        } else {
-                            temperature_prediction_face_start_logging(state);
-                        }
-                    }
-                    break;
-                case temperature_prediction_show_buffer: //flip through buffer
-                    if (state->buffer.length > 0)  state->show_buffer_state = state->show_buffer_state - 1 < 0 ? state->buffer.length - 1 : state->show_buffer_state - 1;
-                    temperature_prediction_face_display_buffer_data(state);                  
                     break;
             }
             break;
