@@ -89,15 +89,22 @@ static float temperature_correction_face_calculate_end_temperature_least_square(
 
 /// @brief calculate end temperature with fixed delta between Tcurrent and Tstart and SMA over the last n calculated end temperatures
 static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_state_t *state) {
-    if (state->buffer.length > 1) {
-        float temperature_current = state->buffer.data[state->buffer.head_index];
-        int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
-        float temperature_start = state->buffer.data[start_index];
-        float end_temperature = temperature_correction_face_calculate_end_temperature_raw(state->buffer.length - 1, temperature_current, temperature_start, state->coefficient);
+    if(state->debug_use_alternative_algorithm) {
+        float end_temperature = temperature_correction_face_calculate_end_temperature_least_square(state, &state->buffer);
         temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
         return temperature_prediction_face_calculate_average(&state->calculated_temperatures);
     }
-    return -999; //buffer does not contain enough values for calculation
+    else {
+        if (state->buffer.length > 1) {
+            float temperature_current = state->buffer.data[state->buffer.head_index];
+            int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
+            float temperature_start = state->buffer.data[start_index];
+            float end_temperature = temperature_correction_face_calculate_end_temperature_raw(state->buffer.length - 1, temperature_current, temperature_start, state->coefficient);
+            temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
+            return temperature_prediction_face_calculate_average(&state->calculated_temperatures);
+        }
+        return -999; //buffer does not contain enough values for calculation
+    }
 }
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
@@ -236,6 +243,12 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             if (subsecond % 2) 
                 watch_display_text(WATCH_POSITION_SECONDS, state->start_coefficient_calculation ? " y" : " n");
             break;
+        case 12:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "DEBG", "DE");
+            watch_display_text(WATCH_POSITION_BOTTOM, "DEBUG ");
+            if (subsecond % 2) 
+                watch_display_text(WATCH_POSITION_SECONDS, state->debug ? " y" : " n");
+            break;
         default:
             break;
     }
@@ -279,6 +292,9 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
         case 11:
             state->start_coefficient_calculation = !state->start_coefficient_calculation;
             break;
+        case 12:
+            state->start_coefficient_calculation = !state->start_coefficient_calculation;
+            break
         default:
             break;
     }
@@ -293,7 +309,8 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
         if (state->show_real_temperature) {
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEMP", "TE");
         } else {
-           watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ESTI", "ET");
+           if (state->debug_use_alternative_algorithm) watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ALTE", "AA");
+           else watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ESTI", "ET");
         }
     } else if(state->mode == temperature_prediction_coefficient) {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COEF", "CO");
@@ -370,6 +387,8 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
         state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
         state->show_real_temperature = true;
+        state->debug = false;
+        state->debug_use_alternative_algorithm = false;
     }
 }
 
@@ -432,7 +451,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state = temperature_prediction_face_get_next_settings_state(state);
                     temperature_prediction_face_display_settings(state, event.subsecond);
-                    if (state->settings_state > 11) {
+                    if (state->settings_state > 12) {
                         if (state->start_coefficient_calculation) {
                             temperature_prediction_face_start_coefficient_calculation(state);
                         } else {
@@ -476,8 +495,12 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     temperature_prediction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
                     break;
                 case temperature_prediction_running: 
-                    movement_set_use_imperial_units(!movement_use_imperial_units());
-                    temperature_prediction_face_update_display(state, state->show_real_temperature ? movement_get_temperature() : state->last_calculated_temperature);
+                    if (state->debug) {
+                        state->debug_use_alternative_algorithm = !debug_use_alternative_algorithm;
+                    } else {
+                        movement_set_use_imperial_units(!movement_use_imperial_units());
+                        temperature_prediction_face_update_display(state, state->show_real_temperature ? movement_get_temperature() : state->last_calculated_temperature);
+                    }
                     break;
                 case temperature_prediction_waiting: 
                 case temperature_prediction_show_buffer:
