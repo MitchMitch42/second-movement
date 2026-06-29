@@ -66,17 +66,13 @@ typedef struct {
     int average_count;                                               // number of calculated end temperatures to average
     bool start_coefficient_calculation;
 
-    //for temp logging and coefficient calculation
-    uint32_t last_second;                                             // last RTC second used for timed sampling
-    float last_calculated_temperature;              
-
-
-    bool signal_shown;                                                // whether the signal indicator is currently shown
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
+    uint32_t last_second;                                             // last RTC second used for timed sampling
+    float last_calculated_temperature;    
+    bool signal_shown;                                                // whether the signal indicator is currently shown
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
     uint8_t show_buffer_state;                                        // state index for showing the buffer data after calculation
-    bool show_real_temperature;                                       // if true: show the raw temperature, not the calculated one                   
-    float temperature_to_show_bottom;                                 //if -999: show CALC instead of temperature
+    bool show_real_temperature;                                       // if true: show the raw temperature, not the calculated one   
 
 } temperature_prediction_state_t;
 

@@ -284,7 +284,9 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
     }
 }
 
-static void temperature_prediction_face_update_display(temperature_prediction_state_t *state) {
+/// @brief update display
+/// @param temperature_to_show_bottom what to show at bottom. If -999: show text depending on mode instead of temperature.
+static void temperature_prediction_face_update_display(temperature_prediction_state_t *state, float temperature_to_show_bottom) {
     char buf[8];
 
     if (state->mode == temperature_prediction_running) {
@@ -309,15 +311,15 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
 
     //show temperature at bottom
     if (state->mode == temperature_prediction_running) {
-        if (state->temperature_to_show_bottom == -999) {
+        if (temperature_to_show_bottom == -999) {
             watch_display_text(WATCH_POSITION_BOTTOM, "      ");
         } else {
-            temperature_prediction_face_display_temperature(state->temperature_to_show_bottom);
+            temperature_prediction_face_display_temperature(temperature_to_show_bottom);
         }
     } else if (state->mode == temperature_prediction_coefficient) {
         if (state->show_real_temperature) {
-            temperature_prediction_face_display_temperature(state->temperature_to_show_bottom);
-        } else if (state->temperature_to_show_bottom == -999) {
+            temperature_prediction_face_display_temperature(temperature_to_show_bottom);
+        } else if (temperature_to_show_bottom == -999) {
             watch_display_text(WATCH_POSITION_BOTTOM, "COEFF ");
         }
     }
@@ -330,9 +332,8 @@ static void temperature_prediction_face_start_coefficient_calculation(temperatur
     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second   
     temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);    
     state->show_real_temperature = false;
-    state->temperature_to_show_bottom = -999;
     state->mode = temperature_prediction_coefficient;
-    temperature_prediction_face_update_display(state);
+    temperature_prediction_face_update_display(state, -999);
 }
 
 /// @brief start logging of temperatures
@@ -343,9 +344,8 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second     
     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
-    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : -999; 
     state->mode = temperature_prediction_running;
-    temperature_prediction_face_update_display(state);
+    temperature_prediction_face_update_display(state, state->show_real_temperature ? movement_get_temperature() : -999);
 }
 
 /// @brief stop logging of temperatures
@@ -370,7 +370,6 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
         state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
         state->show_real_temperature = true;
-        state->start_coefficient_calculation = false;
     }
 }
 
@@ -455,8 +454,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_coefficient: //fallthrough
                 case temperature_prediction_running: //toggle "show real temp"
                     state->show_real_temperature = !state->show_real_temperature;
-                    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : state->last_calculated_temperature;
-                    temperature_prediction_face_update_display(state);
+                    temperature_prediction_face_update_display(state, state->show_real_temperature ? movement_get_temperature() : state->last_calculated_temperature);
                     break;
                 case temperature_prediction_setting:
                     temperature_prediction_face_advance_settings(state, true);
@@ -479,7 +477,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     break;
                 case temperature_prediction_running: 
                     movement_set_use_imperial_units(!movement_use_imperial_units());
-                    temperature_prediction_face_update_display(state);
+                    temperature_prediction_face_update_display(state, state->show_real_temperature ? movement_get_temperature() : state->last_calculated_temperature);
                     break;
                 case temperature_prediction_waiting: 
                 case temperature_prediction_show_buffer:
@@ -499,8 +497,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                         else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);               
                         temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
                         state->last_calculated_temperature = temperature_prediction_face_calculate_end_temperature(state);             
-                        state->temperature_to_show_bottom = state->show_real_temperature ? state->buffer.data[state->buffer.head_index] : state->last_calculated_temperature;                 
-                        temperature_prediction_face_update_display(state);
+                        temperature_prediction_face_update_display(state, state->show_real_temperature ? state->buffer.data[state->buffer.head_index] : state->last_calculated_temperature);
                     }
                     break;
                 case temperature_prediction_setting: 
@@ -531,23 +528,19 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                             }
                         }
 
+                        float temperature_to_show_bottom = state->show_real_temperature ? temperature : -999;
+
                         //just show some precalculation here, so it's not so empty...
-                        if (state->show_real_temperature) {
-                            state->temperature_to_show_bottom = temperature;
-                        } else {
-                            if (state->buffer.length < 2) {
-                                state->temperature_to_show_bottom = -999;
-                            } else {
-                                float temperature_start = state->buffer.data[0];
-                                float temperature_current = state->buffer.data[state->buffer.head_index];
-                                float temperature_end = temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
-                                float coeff_f= temperature_prediction_face_calculate_coefficient_simple((state->buffer.length - 1) * 60, temperature_start, temperature_current, temperature_end);
-                                temperature_prediction_face_display_coefficient(coeff_f);
-                                state->temperature_to_show_bottom = 0;
-                            }
+                        if(!state->show_real_temperature && state->buffer.length >= 2) {
+                            float temperature_start = state->buffer.data[0];
+                            float temperature_current = state->buffer.data[state->buffer.head_index];
+                            float temperature_end = temperature_start > temperature_current ? (temperature_current - 0.1) : (temperature_current + 0.1); 
+                            float coeff_f= temperature_prediction_face_calculate_coefficient_simple((state->buffer.length - 1) * 60, temperature_start, temperature_current, temperature_end);
+                            temperature_prediction_face_display_coefficient(coeff_f);
+                            temperature_to_show_bottom = 0;
                         }
   
-                        temperature_prediction_face_update_display(state);
+                        temperature_prediction_face_update_display(state, temperature_to_show_bottom);
                     }
                     break;
             }
