@@ -370,6 +370,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
         state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
         state->show_real_temperature = true;
+        state->start_coefficient_calculation = false;
     }
 }
 
@@ -386,7 +387,17 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
             temperature_prediction_face_start_logging(state);
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
-            break; //no light
+            switch (state->mode) {
+                case temperature_prediction_coefficient:              
+                case temperature_prediction_waiting:
+                case temperature_prediction_running:
+                    movement_illuminate_led();
+                    break;
+                case temperature_prediction_show_buffer:
+                case temperature_prediction_setting:
+                    break;
+            }
+            break;
         case EVENT_LIGHT_LONG_PRESS:
             switch (state->mode) {
                 case temperature_prediction_coefficient:    
@@ -416,11 +427,8 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     state->show_buffer_state = 0;
                     temperature_prediction_face_display_buffer_data(state);
                     break;      
-                case temperature_prediction_coefficient: //fallthrough
-                case temperature_prediction_running: //toggle "show real temp"
-                    state->show_real_temperature = !state->show_real_temperature;
-                    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : state->last_calculated_temperature;
-                    temperature_prediction_face_update_display(state);
+                case temperature_prediction_coefficient:
+                case temperature_prediction_running:
                     break;
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state = temperature_prediction_face_get_next_settings_state(state);
@@ -444,10 +452,11 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_waiting: // start logging
                     temperature_prediction_face_start_logging(state);
                     break;
-                case temperature_prediction_coefficient:
-                    break;
-                case temperature_prediction_running: // stop logging
-                    temperature_prediction_face_stop_logging(state);
+                case temperature_prediction_coefficient: //fallthrough
+                case temperature_prediction_running: //toggle "show real temp"
+                    state->show_real_temperature = !state->show_real_temperature;
+                    state->temperature_to_show_bottom = state->show_real_temperature ? movement_get_temperature() : state->last_calculated_temperature;
+                    temperature_prediction_face_update_display(state);
                     break;
                 case temperature_prediction_setting:
                     temperature_prediction_face_advance_settings(state, true);
