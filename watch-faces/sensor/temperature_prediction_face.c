@@ -113,18 +113,16 @@ static float temperature_correction_face_calculate_end_temperature_error(tempera
         return NAN; //TODO
 
     const float alpha = expf(-coefficient);
-    uint16_t index = (buffer->head_index + 1U) % buffer->length;
+    uint16_t index = (buffer->head_index + 1) % buffer->length;
     const float T0 = buffer->data[index];
-    const float delta = T0 - ambient;
-    float rss = 0.0f;
+    float e = 1.0f;
+    float rss = 0.0f;          // Residual Sum of Squares
     float denominator = 0.0f;
-    float e = alpha;
-    index = (index + 1U) % buffer->length;
 
     for (uint16_t i = 0; i < buffer->length; ++i)
     {
         const float w = 1.0f - e;
-        const float predicted = ambient + delta * e;
+        const float predicted = ambient + (T0 - ambient) * e;
         const float residual = buffer->data[index] - predicted;
         rss += residual * residual;
         denominator += w * w;
@@ -132,9 +130,17 @@ static float temperature_correction_face_calculate_end_temperature_error(tempera
         index = (index + 1) % buffer->length;
     }
 
-    const float sigma2 = rss / (float)(buffer->length - 2U);
+    if (denominator <= 0.0f)
+        return NAN;
 
-    return sqrtf(sigma2 / denominator);
+    // One parameter (ambient) was estimated.
+    const float sigma2 = rss / (buffer->length - 1);
+
+    // Standard error of the ambient estimate.
+    const float se = sqrtf(sigma2 / denominator);
+
+    // 95% confidence interval (approximately).
+    return 1.96f * se;
 }
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
