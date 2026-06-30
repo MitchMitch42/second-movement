@@ -542,7 +542,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                         else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);               
                         temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
                         float calculated_temperature = temperature_prediction_face_calculate_end_temperature(state);   
-                        temperature_prediction_face_display_temperature(state->show_real_temperature || calculated_temperature == 999 ? state->buffer.data[state->buffer.head_index] : calculated_temperature);
+                        temperature_prediction_face_display_temperature(state->show_real_temperature || calculated_temperature == -999 ? state->buffer.data[state->buffer.head_index] : calculated_temperature);
                     }
                     break;
                 case temperature_prediction_setting: 
