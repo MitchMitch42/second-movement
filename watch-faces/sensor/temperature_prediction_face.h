@@ -71,7 +71,6 @@ typedef struct {
 
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
     uint32_t last_second;                                             // last RTC second used for timed sampling
-    float last_calculated_temperature;    
     bool signal_shown;                                                // whether the signal indicator is currently shown
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
     uint8_t show_buffer_state;                                        // state index for showing the buffer data after calculation
