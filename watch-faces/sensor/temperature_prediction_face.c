@@ -107,7 +107,6 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
     }
 }
 
-
 static float temperature_correction_face_calculate_end_temperature_error(temperature_prediction_rolling_buffer_t *buffer, float coefficient, float temperature_end) {
     if (buffer->length < 2) {
         return NAN; // Need at least 2 points to estimate 1 parameter with residual
@@ -351,9 +350,18 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
     }
 
     //show additional info in top right position
-    if (state->mode == temperature_prediction_coefficient || (state->mode == temperature_prediction_running && !state->show_real_temperature)) { 
-        //display buffer item count     
-        sprintf(buf, "%2d", state->buffer.length);
+    if (state->mode == temperature_prediction_coefficient || (state->mode == temperature_prediction_running && !state->show_real_temperature)) {        
+        if (state->mode == temperature_prediction_running && state->debug_use_alternative_algorithm) {
+            //display standard error
+            float se= temperature_correction_face_calculate_end_temperature_error;
+            int se_int = (int)(se * 10 + 0.5) //1.26 -> 13
+            se_int = se_int > 99 ? 99 : se_int;
+            sprintf(buf, "%02d", se_int);
+        }
+        else {
+            //display buffer item count  
+            sprintf(buf, "%2d", state->buffer.length); 
+        }
     } else {
         //display nothing
         sprintf(buf, "  ");
