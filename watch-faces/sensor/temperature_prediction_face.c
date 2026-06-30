@@ -108,10 +108,6 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
 }
 
 static float temperature_correction_face_calculate_end_temperature_error(temperature_prediction_rolling_buffer_t *buffer, float coefficient, float temperature_end) {
-    if (buffer->length < 2) {
-        return NAN; // Need at least 2 points to estimate 1 parameter with residual
-    }
-
     const float alpha = expf(-coefficient);
     uint16_t index = (buffer->head_index + 1) % buffer->length;
     const float delta = buffer->data[index] - temperature_end;
@@ -139,6 +135,15 @@ static float temperature_correction_face_calculate_end_temperature_error(tempera
     // Standard error of the ambient estimate
     return sqrtf(sigma2 / denominator);
 }
+
+/// @brief calculate standard error
+/// @return standard error * 10, capped at 99
+static int temperature_correction_face_calculate_end_temperature_error(temperature_prediction_state_t *state) {
+    if (state->buffer->length < 2) {
+        return -1; // Need at least 2 points to estimate 1 parameter with residual
+    int standard_error = (int)(temperature_correction_face_calculate_end_temperature_error(state->buffer, state->coefficient, state->calculated_temperatures.data[state->calculated_temperatures.head_index]) * 10 + 0.5); //1.26 -> 13
+    return standard_error > 99 ? 99 standard_error;
+}       
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
 static float temperature_prediction_face_calculate_coefficient_simple(int delta, float temperature_start, float temperature_current, float temperature_end ) {
