@@ -108,21 +108,22 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
 }
 
 
-static float temperature_correction_face_calculate_end_temperature_error(temperature_prediction_rolling_buffer_t *buffer, float coefficient, float ambient) {
-    if (buffer->length < 3)
-        return NAN; //TODO
+static float temperature_correction_face_calculate_end_temperature_error(temperature_prediction_rolling_buffer_t *buffer, float coefficient, float temperature_end) {
+    if (buffer->length < 2) {
+        return NAN; // Need at least 2 points to estimate 1 parameter with residual
+    }
 
     const float alpha = expf(-coefficient);
     uint16_t index = (buffer->head_index + 1) % buffer->length;
-    const float T0 = buffer->data[index];
-    float e = 1.0f;
-    float rss = 0.0f;          // Residual Sum of Squares
+    const float delta = buffer->data[index] - temperature_end;
+    float e = 1.0f; // Start at alpha^0 = 1 for t0    
+    float rss = 0.0f;
     float denominator = 0.0f;
 
-    for (uint16_t i = 0; i < buffer->length; ++i)
+    for (uint16_t i = 0; i < buffer->length; i++)
     {
-        const float w = 1.0f - e;
-        const float predicted = ambient + (T0 - ambient) * e;
+        float w = 1.0f - e; // (1 - alpha^i)     
+        const float predicted = temperature_end + delta * e; // Predicted temperature at step i
         const float residual = buffer->data[index] - predicted;
         rss += residual * residual;
         denominator += w * w;
@@ -133,14 +134,11 @@ static float temperature_correction_face_calculate_end_temperature_error(tempera
     if (denominator <= 0.0f)
         return NAN;
 
-    // One parameter (ambient) was estimated.
+    // Unbiased variance estimate
     const float sigma2 = rss / (buffer->length - 1);
-
-    // Standard error of the ambient estimate.
-    const float se = sqrtf(sigma2 / denominator);
-
-    // 95% confidence interval (approximately).
-    return 1.96f * se;
+    
+    // Standard error of the ambient estimate
+    return sqrtf(sigma2 / denominator);
 }
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using two points
