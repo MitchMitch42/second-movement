@@ -339,26 +339,41 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
     }
 }
 
+/// @brief update WATCH_POSITION_TOP_RIGHT and WATCH_POSITION_BOTTOM according to state (running / coefficient calculation)
 static void temperature_prediction_face_update_display(temperature_prediction_state_t *state, float temperature) {
     char buf[8];
-    if (state->mode == temperature_prediction_coefficient) {      
-        sprintf(buf, "%2d", state->buffer.length);   
-        watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
-        
+
+    //temperature_prediction_coefficient
+    if (state->mode == temperature_prediction_coefficient) {         
+        //WATCH_POSITION_BOTTOM
         if (state->show_real_temperature) {
             temperature_prediction_face_display_temperature(temperature == -999 ? movement_get_temperature() : temperature);
         } else {
             watch_display_text(WATCH_POSITION_BOTTOM, "COEFF ");    
         }
-    } else {
+
+        //WATCH_POSITION_TOP_RIGHT   
+        sprintf(buf, "%2d", state->buffer.length);   
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+    } else { //temperature_prediction_running  
+        //WATCH_POSITION_BOTTOM
+        if (temperature != -999) {
+            temperature_prediction_face_display_temperature(temperature);
+        } else if (state->show_real_temperature || state->calculated_temperatures.length <= 0) {
+            temperature_prediction_face_display_temperature(movement_get_temperature());
+        } else {
+            temperature_prediction_face_display_temperature(temperature_prediction_face_calculate_average(&state->calculated_temperatures));
+        }
+
+        //WATCH_POSITION_TOP_RIGHT   
         if(!state->show_real_temperature || state->debug) {
             if(state->debug_use_alternative_algorithm) {
                 int8_t error = temperature_correction_face_calculate_end_temperature_error(state);
                 if (error == -1) { 
-                    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+                    watch_display_text(WATCH_POSITION_SECONDS, "  ");
                 } else {
                     sprintf(buf, "%02d", error);   
-                    watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+                    watch_display_text(WATCH_POSITION_SECONDS, buf);
                 }
             } else {
                 sprintf(buf, "%2d", state->buffer.length);   
@@ -367,21 +382,20 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
         } else {
             watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
         }
-
-        if (state->show_real_temperature || state->calculated_temperatures.length <= 0) {
-            temperature_prediction_face_display_temperature(temperature == -999 ? movement_get_temperature() : temperature);
-        } else {
-            temperature_prediction_face_display_temperature(temperature_prediction_face_calculate_average(&state->calculated_temperatures));
-        }
-
-        if (state->show_real_temperature) {
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEM", "TE");
-        } else if (state->debug_use_alternative_algorithm) {
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ALT", "AA");
-        } else {
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "EST", "ET");
-        }
     } 
+}
+
+/// @brief update WATCH_POSITION_TOP_LEFT according to state (running+temp / running+calc / coefficient calculation)
+static void temperature_prediction_face_update_display_top_left(temperature_prediction_state_t *state) {
+    if (state->mode == temperature_prediction_coefficient) {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
+    } else if (state->show_real_temperature) {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEM", "TE");
+    } else if (state->debug_use_alternative_algorithm) {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ALT", "AA");
+    } else {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "EST", "ET");
+    }
 }
 
 /// @brief start coefficient calculation
@@ -391,8 +405,8 @@ static void temperature_prediction_face_start_coefficient_calculation(temperatur
     temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);    
     state->show_real_temperature = false;
     state->mode = temperature_prediction_coefficient;
+    temperature_prediction_face_update_display_top_left(state);
     temperature_prediction_face_update_display(state, -999);
-    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second, to ensure that first and second reading are one second apart
 }
 
@@ -403,6 +417,7 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
     state->mode = temperature_prediction_running;
+    temperature_prediction_face_update_display_top_left(state);
     temperature_prediction_face_update_display(state, -999);
     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second, to ensure that first and second reading are one second apart
 }
@@ -514,6 +529,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_coefficient: //fallthrough
                 case temperature_prediction_running: //toggle "show real temp"
                     state->show_real_temperature = !state->show_real_temperature;
+                    temperature_prediction_face_update_display_top_left(state);
                     temperature_prediction_face_update_display(state, -999);
                     break;
                 case temperature_prediction_setting:
@@ -541,6 +557,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     } else {
                         movement_set_use_imperial_units(!movement_use_imperial_units());
                     }
+                    if (state->debug) temperature_prediction_face_update_display_top_left(state);
                     temperature_prediction_face_update_display(state, -999);
                     break;
                 case temperature_prediction_waiting: 
@@ -561,7 +578,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                         else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);               
                         temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
                         float calculated_temperature = temperature_prediction_face_calculate_end_temperature(state);   
-                        temperature_prediction_face_display_temperature(state->show_real_temperature || calculated_temperature == -999 ? state->buffer.data[state->buffer.head_index] : calculated_temperature);
+                        temperature_prediction_face_update_display(state, state->show_real_temperature || calculated_temperature == -999 ? state->buffer.data[state->buffer.head_index] : calculated_temperature);
                     }
                     break;
                 case temperature_prediction_setting: 
