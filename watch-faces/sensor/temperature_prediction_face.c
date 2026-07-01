@@ -140,7 +140,7 @@ static float temperature_correction_face_calculate_standard_error(temperature_pr
 
 /// @brief calculate standard error
 /// @return standard error * 10, capped at 99
-static int temperature_correction_face_calculate_end_temperature_error(temperature_prediction_state_t *state) {
+static int8_t temperature_correction_face_calculate_end_temperature_error(temperature_prediction_state_t *state) {
     if (state->buffer.length < 2) {
         return -1; // Need at least 2 points to estimate 1 parameter with residual
     }
@@ -340,13 +340,34 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
 }
 
 static void temperature_prediction_face_update_display(temperature_prediction_state_t *state, float temperature) {
-    if (state->mode == temperature_prediction_coefficient) {
+    char buf[8];
+    if (state->mode == temperature_prediction_coefficient) {      
+        sprintf(buf, "%2d", state->buffer.length);   
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+        
         if (state->show_real_temperature) {
             temperature_prediction_face_display_temperature(temperature == -999 ? movement_get_temperature() : temperature);
         } else {
             watch_display_text(WATCH_POSITION_BOTTOM, "COEFF ");    
         }
     } else {
+        if(!state->show_real_temperature || state->debug) {
+            if(state->debug_use_alternative_algorithm) {
+                int8_t error = temperature_correction_face_calculate_end_temperature_error(state);
+                if (error == -1) { 
+                    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+                } else {
+                    sprintf(buf, "%02d", error);   
+                    watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+                }
+            } else {
+                sprintf(buf, "%2d", state->buffer.length);   
+                watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+            }
+        } else {
+            watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        }
+
         if (state->show_real_temperature || state->calculated_temperatures.length <= 0) {
             temperature_prediction_face_display_temperature(temperature == -999 ? movement_get_temperature() : temperature);
         } else {
@@ -372,7 +393,6 @@ static void temperature_prediction_face_start_coefficient_calculation(temperatur
     state->mode = temperature_prediction_coefficient;
     temperature_prediction_face_update_display(state, -999);
     watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second, to ensure that first and second reading are one second apart
 }
 
@@ -384,7 +404,6 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
     state->mode = temperature_prediction_running;
     temperature_prediction_face_update_display(state, -999);
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
     state->last_second = watch_rtc_get_date_time().unit.second; // start logging at next second, to ensure that first and second reading are one second apart
 }
 
@@ -516,7 +535,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     temperature_prediction_face_advance_settings(state, false);
                     temperature_prediction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
                     break;
-                case temperature_prediction_running: 
+                case temperature_prediction_running: //toggle Celsius and Fahrenheit
                     if (state->debug) {
                         state->debug_use_alternative_algorithm = !state->debug_use_alternative_algorithm;
                     } else {
