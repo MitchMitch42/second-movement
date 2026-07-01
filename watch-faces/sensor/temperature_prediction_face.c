@@ -69,6 +69,7 @@ static float temperature_correction_face_calculate_end_temperature_raw(int delta
 }
 
 /// calculate end temperature with a closed-form least squares solution of Newton's law of cooling
+/// @brief calculate end temperature with a closed-form least squares solution of Newton's law of cooling, performing a linear regression on the linearized exponential temperature curve
 static float temperature_correction_face_calculate_end_temperature_least_square(temperature_prediction_rolling_buffer_t *buffer, float coefficient) {
     const float alpha = expf(-coefficient); // dt = 1s
     float numerator = 0.0f;
@@ -141,7 +142,7 @@ static float temperature_correction_face_calculate_standard_error(temperature_pr
 /// @brief calculate standard error
 /// @return standard error * 10, capped at 99
 static int8_t temperature_correction_face_calculate_end_temperature_error(temperature_prediction_state_t *state) {
-    if (state->buffer.length < 2) {
+    if (state->buffer.length < 2 || state->calculated_temperatures.length < 1) {
         return -1; // Need at least 2 points to estimate 1 parameter with residual
     }
     float standard_error_f = temperature_correction_face_calculate_standard_error(&state->buffer, state->coefficient, state->calculated_temperatures.data[state->calculated_temperatures.head_index]);
@@ -554,6 +555,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_running: //toggle Celsius and Fahrenheit
                     if (state->debug) {
                         state->debug_use_alternative_algorithm = !state->debug_use_alternative_algorithm;
+                        temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
                     } else {
                         movement_set_use_imperial_units(!movement_use_imperial_units());
                     }
