@@ -373,8 +373,17 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
                 sprintf(buf, "%2d", state->buffer.length);  
                 watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
             }
-        } else {
             watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        } else {   
+            float error = temperature_correction_face_calculate_end_temperature_error(state);          
+            if (error < 1.0) {
+                int err = (int)(error * 10.0);
+                sprintf(buf, ",%1d", err);   
+            } else {
+                int err = (int)(error + 0.5);
+                sprintf(buf, "%2d", err);   
+            }
+            watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
         }
     } 
 }
