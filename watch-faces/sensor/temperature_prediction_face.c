@@ -112,7 +112,7 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
 }
 
 /// @brief calculate calculated temperature deviation
-static int8_t temperature_correction_face_calculate_end_temperature_error(temperature_prediction_state_t *state) {
+static float temperature_correction_face_calculate_end_temperature_error(temperature_prediction_state_t *state) {
     if (state->calculated_averages.length < 1) {
         return -1; 
     }
@@ -122,7 +122,9 @@ static int8_t temperature_correction_face_calculate_end_temperature_error(temper
         if (state->calculated_averages.data[i] < min) min = state->calculated_averages.data[i]; // Update minimum
         if (state->calculated_averages.data[i] > max) max = state->calculated_averages.data[i]; // Update maximum
     }
-    int err = (int)((max - min) * 10 + 0.5); //1.26 -> 13
+    return max - min;
+
+    //int err = (int)(( * 10 + 0.5); //1.26 -> 13
     
     // printf("Yo.\r\n");
     // char buf[20];
@@ -134,7 +136,7 @@ static int8_t temperature_correction_face_calculate_end_temperature_error(temper
     // printf("%s\r\n", buf);
     // printf("yo");
 
-    return err > 99 ? 99 : err;
+    //return err > 99 ? 99 : err;
 }      
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using all points and performing a linear regression of the transformed logarithmic curve
@@ -357,21 +359,18 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
         }
 
         //WATCH_POSITION_TOP_RIGHT   
-        if(!state->show_real_temperature || state->debug) {
-            if(state->debug_use_alternative_algorithm) {
-                int8_t error = temperature_correction_face_calculate_end_temperature_error(state);
-                if (error == -1) { 
-                    watch_display_text(WATCH_POSITION_SECONDS, "  ");
-                    sprintf(buf, "%2d", state->buffer.length);  
-                    watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
-                } else {
-                    sprintf(buf, "%02d", error);   
-                    watch_display_text(WATCH_POSITION_SECONDS, buf);
-                    sprintf(buf, "%2d", state->buffer.length);  
-                    watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
-                }
-            } else {
-                sprintf(buf, "%2d", state->buffer.length);   
+        if(state->debug) {
+            float error = temperature_correction_face_calculate_end_temperature_error(state);            
+            if (error == -1) { 
+                watch_display_text(WATCH_POSITION_SECONDS, "  ");
+                sprintf(buf, "%2d", state->buffer.length);  
+                watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+            } else {           
+                int err = (int)(error * 10 + 0.5); //1.26 -> 13
+                err = err > 99 ? 99 : err;
+                sprintf(buf, "%02d", err);   
+                watch_display_text(WATCH_POSITION_SECONDS, buf);
+                sprintf(buf, "%2d", state->buffer.length);  
                 watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
             }
         } else {
