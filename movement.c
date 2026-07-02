@@ -522,7 +522,7 @@ bool movement_default_loop_handler(movement_event_t event) {
                 movement_move_to_face(0);
             }
             break;
-        case EVENT_ALARM_BUTTON_UP:
+        case EVENT_ALARM_LONG_PRESS:
             if (MOVEMENT_TERTIARY_FACE_INDEX && movement_state.current_face_idx == 0) {
                 movement_move_to_face(MOVEMENT_TERTIARY_FACE_INDEX);
             }
