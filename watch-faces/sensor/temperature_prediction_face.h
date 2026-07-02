@@ -34,7 +34,8 @@
  */
 
 #define TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX 120 //todo: check how many kb this takes
-#define TEMPERATURE_PREDICTION_AVERAGING_MAX 60
+#define TEMPERATURE_PREDICTION_AVERAGING_MAX 90
+#define TEMPERATURE_PREDICTION_AVERAGING_ERROR 60
 #define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES 5 //defines how long the temperature shall be constant to determine that equilibrium has been reached.
 #define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD 0.1 //defines the maximum allowed temperature deviation to determine that equilibrium has been reached.
 #define TEMPERATURE_PREDICTION_CALCULATION_IGNORE_START_MINUTES 5 
@@ -59,6 +60,7 @@ typedef struct {
     // buffers
     temperature_prediction_rolling_buffer_t buffer;                  // rolling buffer holding recent raw temperature samples
     temperature_prediction_rolling_buffer_t calculated_temperatures; // rolling buffer holding corrected temperatures
+    temperature_prediction_rolling_buffer_t calculated_averages;     // rolling buffer holding averaged temperatures
     
     // settings
     float coefficient;                                               // heat transfer coefficient used for correction

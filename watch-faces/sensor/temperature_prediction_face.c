@@ -93,7 +93,9 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
         if (state->buffer.length > 1) {
             float end_temperature = temperature_correction_face_calculate_end_temperature_least_square(&state->buffer, state->coefficient);
             temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
-            return temperature_prediction_face_calculate_average(&state->calculated_temperatures);
+            float average= temperature_prediction_face_calculate_average(&state->calculated_temperatures);
+            temperature_prediction_face_add_to_rolling_buffer(&state->calculated_averages, average);
+            return average;
         }
     }
     else {
@@ -103,54 +105,39 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
             float temperature_start = state->buffer.data[start_index];
             float end_temperature = temperature_correction_face_calculate_end_temperature_raw(state->buffer.length - 1, temperature_current, temperature_start, state->coefficient);
             temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
-            return temperature_prediction_face_calculate_average(&state->calculated_temperatures);
+            float average= temperature_prediction_face_calculate_average(&state->calculated_temperatures);
+            temperature_prediction_face_add_to_rolling_buffer(&state->calculated_averages, average);
+            return average;
         }
     }
     return -999; //buffer does not contain enough values for calculation
 }
 
-static float temperature_correction_face_calculate_standard_error(temperature_prediction_rolling_buffer_t *buffer, float coefficient, float temperature_end) {
-    const float alpha = expf(-coefficient);
-    uint16_t index = (buffer->head_index + 1) % buffer->length;
-    const float delta = buffer->data[index] - temperature_end;
-    float e = 1.0f; // Start at alpha^0 = 1 for t0    
-    float rss = 0.0f;
-    float denominator = 0.0f;
-
-    for (uint16_t i = 0; i < buffer->length; i++)
-    {
-        float w = 1.0f - e; // (1 - alpha^i)     
-        const float predicted = temperature_end + delta * e; // Predicted temperature at step i
-        const float residual = buffer->data[index] - predicted;
-        rss += residual * residual;
-        denominator += w * w;
-        e *= alpha;
-        index = (index + 1) % buffer->length;
-    }
-
-    if (denominator <= 0.0f)
-        return NAN;
-
-    // Unbiased variance estimate
-    const float sigma2 = rss / (buffer->length - 1);
-    
-    // Standard error of the ambient estimate
-    return sqrtf(sigma2 / denominator);
-}
-
-/// @brief calculate standard error
-/// @return standard error * 10, capped at 99
+/// @brief calculate calculated temperature deviation
 static int8_t temperature_correction_face_calculate_end_temperature_error(temperature_prediction_state_t *state) {
-    if (state->buffer.length < 2 || state->calculated_temperatures.length < 1) {
-        return -1; // Need at least 2 points to estimate 1 parameter with residual
+    if (state->calculated_averages.length < 1) {
+        return -1; 
     }
-    float standard_error_f = temperature_correction_face_calculate_standard_error(&state->buffer, state->coefficient, state->calculated_temperatures.data[state->calculated_temperatures.head_index]);
-    if (standard_error_f == NAN) {
-        return -1; // Need at least 2 points to estimate 1 parameter with residual
+    float min = state->calculated_averages.data[0];
+    float max = state->calculated_averages.data[0];
+    for (int i = 1; i < state->calculated_averages.length; i++) {
+        if (state->calculated_averages.data[i] < min) min = state->calculated_averages.data[i]; // Update minimum
+        if (state->calculated_averages.data[i] > max) max = state->calculated_averages.data[i]; // Update maximum
     }
-    int standard_error = (int)(standard_error_f * 10 + 0.5); //1.26 -> 13
-    return standard_error > 99 ? 99 : standard_error;
-}       
+    int err = (int)((max - min) * 10 + 0.5); //1.26 -> 13
+    
+    // printf("Yo.\r\n");
+    // char buf[20];
+    // sprintf(buf, "%f", max); 
+    // printf("%s\r\n", buf);
+    // sprintf(buf, "%f", min); 
+    // printf("%s\r\n", buf);
+    // sprintf(buf, "%d", err); 
+    // printf("%s\r\n", buf);
+    // printf("yo");
+
+    return err > 99 ? 99 : err;
+}      
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using all points and performing a linear regression of the transformed logarithmic curve
 static float temperature_prediction_face_calculate_coefficient_with_linear_regression(temperature_prediction_rolling_buffer_t *buffer, int end_temp_cnt, int ignore_start_cnt, float ignore_delta_temp) {
@@ -426,6 +413,7 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
     state->signal_shown = false;   
     temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
     temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
+    temperature_prediction_face_init_rolling_buffer(&state->calculated_averages, TEMPERATURE_PREDICTION_AVERAGING_ERROR);
     state->mode = temperature_prediction_running;
     temperature_prediction_face_update_display_top_left(state);
     temperature_prediction_face_update_display(state, -999);
@@ -449,6 +437,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         temperature_prediction_state_t *state = (temperature_prediction_state_t *)*context_ptr;       
         state->buffer.data = malloc(TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX * sizeof(float));
         state->calculated_temperatures.data = malloc(TEMPERATURE_PREDICTION_AVERAGING_MAX * sizeof(float));
+        state->calculated_averages.data = malloc(TEMPERATURE_PREDICTION_AVERAGING_ERROR * sizeof(float));
         
         state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
@@ -565,6 +554,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     if (state->debug) {
                         state->debug_use_alternative_algorithm = !state->debug_use_alternative_algorithm;
                         temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
+                        temperature_prediction_face_init_rolling_buffer(&state->calculated_averages, TEMPERATURE_PREDICTION_AVERAGING_ERROR);
                     } else {
                         movement_set_use_imperial_units(!movement_use_imperial_units());
                     }
