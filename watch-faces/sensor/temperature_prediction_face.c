@@ -584,7 +584,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                         state->signal_shown = !state->signal_shown;
                         if(state->signal_shown) watch_set_indicator(WATCH_INDICATOR_SIGNAL);
                         else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);               
-                        temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature_debug());
+                        temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature());
                         float calculated_temperature = temperature_prediction_face_calculate_end_temperature(state);   
                         temperature_prediction_face_update_display(state, state->show_real_temperature || calculated_temperature == -999 ? state->buffer.data[state->buffer.head_index] : calculated_temperature);
                     }
