@@ -37,6 +37,39 @@ bool _clear;
 uint8_t _com;
 uint8_t _seg;
 
+int8_t hp_signal_tune[] = {
+    BUZZER_NOTE_B5, 12,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_E6, 12,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_G6, 6,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_F6SHARP_G6FLAT, 6,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_E6, 16,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_B6, 8,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_A6, 24,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_F6SHARP_G6FLAT, 24,
+    BUZZER_NOTE_REST, 1,
+
+    BUZZER_NOTE_E6, 12,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_G6, 6,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_F6SHARP_G6FLAT, 6,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_D6SHARP_E6FLAT, 16,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_F6, 8,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_B5, 24,
+
+    0
+};
+
 void easteregg_face_setup(uint8_t watch_face_index, void ** context_ptr) {
     (void) watch_face_index;
     if (*context_ptr == NULL) {
@@ -120,7 +153,7 @@ bool easteregg_face_loop(movement_event_t event, void *context) {
             break;
 
         case EVENT_ALARM_BUTTON_DOWN:
-            //watch_buzzer_play_sequence(movement_get_melody(8), NULL);
+            watch_buzzer_play_sequence(hp_signal_tune, NULL);
             break;
         
         default:
