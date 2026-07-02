@@ -236,15 +236,15 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             break;
         case 1:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BUF", "BU");
-            sprintf(buf, "%3d", state->buffer_size);
-            if (subsecond % 2) watch_display_text(WATCH_POSITION_HOURS, buf);
-            else watch_display_text(WATCH_POSITION_HOURS, "   ");
+            sprintf(buf, "%6d", state->buffer_size);
+            if (subsecond % 2) watch_display_text(WATCH_POSITION_BOTTOM, buf);
+            else watch_display_text(WATCH_POSITION_BOTTOM, "      ");
             break;
         case 2:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVG", "AV");
-            sprintf(buf, "%3d", state->average_count);
-            if (subsecond % 2) watch_display_text(WATCH_POSITION_HOURS, buf);
-            else watch_display_text(WATCH_POSITION_HOURS, "   ");
+            sprintf(buf, "%6d", state->average_count);
+            if (subsecond % 2) watch_display_text(WATCH_POSITION_BOTTOM, buf);
+            else watch_display_text(WATCH_POSITION_BOTTOM, "      ");
             break;
         case 3: //TODO: remove
             break;
