@@ -327,7 +327,7 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
         //WATCH_POSITION_TOP_RIGHT   
         sprintf(buf, "%2d", state->buffer.length);   
         watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
-    } else { //temperature_prediction_running  
+    } else if (state->mode == temperature_prediction_running) {
         //WATCH_POSITION_BOTTOM
         if (temperature != -999) {
             temperature_prediction_face_display_temperature(temperature);
@@ -338,21 +338,7 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
         }
 
         //WATCH_POSITION_TOP_RIGHT   
-        if(state->debug) {
-            float error = temperature_correction_face_calculate_end_temperature_error(state);            
-            if (error == -1) { 
-                watch_display_text(WATCH_POSITION_SECONDS, "  ");
-                sprintf(buf, "%2d", state->buffer.length);  
-                watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
-            } else {           
-                int err = (int)(error * 10 + 0.5); //1.26 -> 13
-                err = err > 99 ? 99 : err;
-                sprintf(buf, "%02d", err);   
-                watch_display_text(WATCH_POSITION_SECONDS, buf);
-                sprintf(buf, "%2d", state->buffer.length);  
-                watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
-            }
-        } else if (state->show_real_temperature) {
+        if (state->show_real_temperature) {
             watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
         } else {   
             float error = temperature_correction_face_calculate_end_temperature_error(state);          
