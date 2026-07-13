@@ -58,14 +58,6 @@ static float temperature_prediction_face_calculate_average(temperature_predictio
     return sum / buffer->length;
 }
 
-/// @brief calculate end temperature using Newton's law of cooling
-/// @param delta time difference between Tstart and Tcurrent in seconds
-static float temperature_correction_face_calculate_end_temperature_raw(int delta, float temperature_current, float temperature_start, float coefficient) {
-    //=(Tcurrent-Tstart*EXP(-k*time))/(1-EXP(-k*time))
-    float ex =  expf(-coefficient * (float)delta);
-    return (temperature_current - temperature_start * ex) / (1 - ex);
-}
-
 /// @brief calculate end temperature with a closed-form least squares solution of Newton's law of cooling, performing a linear regression on the linearized exponential temperature curve
 static float temperature_correction_face_calculate_end_temperature_least_square(temperature_prediction_rolling_buffer_t *buffer, float coefficient) {
     const float alpha = expf(-coefficient); // dt = 1s
@@ -87,28 +79,15 @@ static float temperature_correction_face_calculate_end_temperature_least_square(
 
 /// @brief calculate end temperature with fixed delta between Tcurrent and Tstart and SMA over the last n calculated end temperatures
 static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_state_t *state) {
-    if(state->debug_use_alternative_algorithm) {
-        if (state->buffer.length > 1) {
-            float end_temperature = temperature_correction_face_calculate_end_temperature_least_square(&state->buffer, state->coefficient);
-            temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
-            float average= temperature_prediction_face_calculate_average(&state->calculated_temperatures);
-            temperature_prediction_face_add_to_rolling_buffer(&state->calculated_averages, average);
-            return average;
-        }
+    if (state->buffer.length > 1) {
+        float end_temperature = temperature_correction_face_calculate_end_temperature_least_square(&state->buffer, state->coefficient);
+        temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
+        float average= temperature_prediction_face_calculate_average(&state->calculated_temperatures);
+        temperature_prediction_face_add_to_rolling_buffer(&state->calculated_averages, average);
+        return average;
+    } else {
+        return -999; //buffer does not contain enough values for calculation
     }
-    else {
-        if (state->buffer.length > 1) {
-            float temperature_current = state->buffer.data[state->buffer.head_index];
-            int start_index = state->buffer.length < state->buffer.max || state->buffer.head_index + 1 == state->buffer.max ? 0 : state->buffer.head_index + 1;
-            float temperature_start = state->buffer.data[start_index];
-            float end_temperature = temperature_correction_face_calculate_end_temperature_raw(state->buffer.length - 1, temperature_current, temperature_start, state->coefficient);
-            temperature_prediction_face_add_to_rolling_buffer(&state->calculated_temperatures, end_temperature);
-            float average= temperature_prediction_face_calculate_average(&state->calculated_temperatures);
-            temperature_prediction_face_add_to_rolling_buffer(&state->calculated_averages, average);
-            return average;
-        }
-    }
-    return -999; //buffer does not contain enough values for calculation
 }
 
 /// @brief calculate calculated temperature deviation
@@ -395,8 +374,6 @@ static void temperature_prediction_face_update_display_top_left(temperature_pred
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
     } else if (state->show_real_temperature) {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEM", "TE");
-    } else if (state->debug_use_alternative_algorithm) {
-        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ALT", "AA");
     } else {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "EST", "ET");
     }
@@ -451,7 +428,6 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
         state->show_real_temperature = true;
         state->debug = false;
-        state->debug_use_alternative_algorithm = false;
     }
 }
 
@@ -558,14 +534,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     temperature_prediction_face_display_settings(state, watch_rtc_get_date_time().unit.second);
                     break;
                 case temperature_prediction_running: //toggle Celsius and Fahrenheit
-                    if (state->debug) {
-                        state->debug_use_alternative_algorithm = !state->debug_use_alternative_algorithm;
-                        temperature_prediction_face_init_rolling_buffer(&state->calculated_temperatures, state->average_count);
-                        temperature_prediction_face_init_rolling_buffer(&state->calculated_averages, TEMPERATURE_PREDICTION_AVERAGING_ERROR);
-                    } else {
-                        movement_set_use_imperial_units(!movement_use_imperial_units());
-                    }
-                    if (state->debug) temperature_prediction_face_update_display_top_left(state);
+                    movement_set_use_imperial_units(!movement_use_imperial_units());
                     temperature_prediction_face_update_display(state, -999);
                     break;
                 case temperature_prediction_waiting: 

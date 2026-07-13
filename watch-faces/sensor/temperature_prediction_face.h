@@ -69,8 +69,6 @@ typedef struct {
     bool start_coefficient_calculation;
     bool debug;
 
-    bool debug_use_alternative_algorithm;
-
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
     uint32_t last_second;                                             // last RTC second used for timed sampling
     bool signal_shown;                                                // whether the signal indicator is currently shown
