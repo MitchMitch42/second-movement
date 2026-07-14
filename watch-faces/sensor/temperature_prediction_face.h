@@ -59,7 +59,6 @@ typedef struct {
     int buffer_size;                                                 // delta between Tcurrent and Tstart
     int average_count;                                               // number of calculated end temperatures to average
     bool start_coefficient_calculation;
-    bool debug;
 
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
     uint32_t last_second;                                             // last RTC second used for timed sampling

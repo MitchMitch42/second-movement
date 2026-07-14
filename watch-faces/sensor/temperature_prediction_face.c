@@ -244,12 +244,6 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             if (subsecond % 2) 
                 watch_display_text(WATCH_POSITION_SECONDS, state->start_coefficient_calculation ? " y" : " n");
             break;
-        case 9:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "DBG", "DE");
-            watch_display_text(WATCH_POSITION_BOTTOM, "DEBG  ");
-            if (subsecond % 2) 
-                watch_display_text(WATCH_POSITION_SECONDS, state->debug ? " y" : " n");
-            break;
         default:
             break;
     }
@@ -286,9 +280,6 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             break;
         case 8:
             state->start_coefficient_calculation = !state->start_coefficient_calculation;
-            break;
-        case 9:
-            state->debug = !state->debug;
             break;
         default:
             break;
@@ -396,7 +387,6 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
         state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
         state->show_real_temperature = true;
-        state->debug = false;
     }
 }
 
@@ -421,7 +411,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state = temperature_prediction_face_get_next_settings_state(state);
                     temperature_prediction_face_display_settings(state, event.subsecond);
-                    if (state->settings_state > 9) {
+                    if (state->settings_state > 8) {
                         if (state->start_coefficient_calculation) {
                             temperature_prediction_face_start_coefficient_calculation(state);
                         } else {
