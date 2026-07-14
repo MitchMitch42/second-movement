@@ -37,14 +37,13 @@ typedef enum {
     temperature_prediction_waiting,
     temperature_prediction_running,
     temperature_prediction_setting,
-    temperature_prediction_coefficient,
-    temperature_prediction_show_buffer
+    temperature_prediction_coefficient
 } temperature_prediction_mode_t;
 
 typedef struct {
     float *data;             // the data points
-    int head_index;          // index of the most recent entry (-1 when empty)
     int length;              // current number of valid entries in the buffer
+    int head_index;          // index of the most recent entry (-1 when empty)
     int max;                 // maximum capacity of the buffer
 } temperature_prediction_rolling_buffer_t;
 
@@ -55,10 +54,10 @@ typedef struct {
     temperature_prediction_rolling_buffer_t calculated_averages;     // rolling buffer holding averaged temperatures
     
     // settings
-    float coefficient;                                               // heat transfer coefficient used for correction
-    int buffer_size;                                                 // delta between Tcurrent and Tstart
-    int average_count;                                               // number of calculated end temperatures to average
-    bool start_coefficient_calculation;                              // whether to start the coefficient calculation process
+    float coefficient;                      // heat transfer coefficient
+    int buffer_size;                        // how many raw datapoints shall be used for the estimation
+    int average_count;                      // number of calculated end temperatures to average
+    bool start_coefficient_calculation;     // to start the coefficient calculation process
 
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
     uint32_t last_second;                                             // last RTC second used for timed sampling
