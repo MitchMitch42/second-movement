@@ -497,7 +497,13 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                             } else if (state->buffer.length >= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES) { //only after n minutes
                                 if (temperature_prediction_face_equilibrium_reached(&state->buffer)) { //temperature is stable: stop calculation
                                     state->coefficient = temperature_prediction_face_calculate_coefficient_with_linear_regression(&state->buffer, TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_IGNORE_START_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_END_TEMP_DELTA);
-                                    //TODO: coefficient shall only have 5 decimal places, otherwise we have a different coeff than what we show and adjust
+                                    //coefficient must be positive and shall only have 1 integer place and 5 decimal places, otherwise we can not properly show it 
+                                    state->coefficient = roundf(state->coefficient * 100000.0f) / 100000.0f;
+                                    if (state->coefficient < 0) {
+                                        state->coefficient = 0;
+                                    } else if (state->coefficient > 9.99999) {
+                                        state->coefficient = 9.99999;
+                                    }
                                     temperature_prediction_face_stop_logging(state);
                                     temperature_prediction_face_display_coefficient(state->coefficient);
                                     break;
