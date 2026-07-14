@@ -58,7 +58,7 @@ typedef struct {
     float coefficient;                                               // heat transfer coefficient used for correction
     int buffer_size;                                                 // delta between Tcurrent and Tstart
     int average_count;                                               // number of calculated end temperatures to average
-    bool start_coefficient_calculation;
+    bool start_coefficient_calculation;                              // whether to start the coefficient calculation process
 
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
     uint32_t last_second;                                             // last RTC second used for timed sampling
