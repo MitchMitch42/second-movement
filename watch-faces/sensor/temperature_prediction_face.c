@@ -365,8 +365,6 @@ void temperature_prediction_face_activate(void *context) {
     movement_request_tick_frequency(1);
 }
 
-bool belllll = true;
-
 bool temperature_prediction_face_loop(movement_event_t event, void *context) {
     temperature_prediction_state_t *state = (temperature_prediction_state_t *)context;
 
@@ -435,7 +433,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
         case EVENT_ALARM_LONG_PRESS:
             switch (state->mode) {
                 case temperature_prediction_coefficient: // stop logging
-                    temperature_prediction_face_stop_logging(state);
+                    temperature_prediction_face_start_logging(state, false);
                     break;
                 case temperature_prediction_setting:
                     temperature_prediction_face_advance_settings(state, false);
@@ -450,10 +448,6 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
             }
             break;
         case EVENT_TICK:
-            belllll = !belllll;
-            if (!belllll) watch_set_indicator(WATCH_INDICATOR_BELL);
-            else watch_clear_indicator(WATCH_INDICATOR_BELL);
-
             switch (state->mode) {
                 case temperature_prediction_waiting:
                     break;
