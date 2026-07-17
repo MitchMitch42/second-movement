@@ -60,8 +60,6 @@ typedef struct {
     bool start_coefficient_calculation;     // to start the coefficient calculation process
 
     temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
-    uint32_t last_second;                                             // last RTC second used for timed sampling
-    bool signal_shown;                                                // whether the signal indicator is currently shown
     uint8_t settings_state;                                           // selected sub-setting index when in settings mode
     bool show_real_temperature;                                       // if true: show the raw temperature, not the calculated one   
 
