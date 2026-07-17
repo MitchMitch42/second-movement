@@ -50,9 +50,9 @@ typedef struct {
 typedef struct {
     // buffers
     temperature_prediction_rolling_buffer_t buffer;                  // rolling buffer holding recent raw temperature samples
-    temperature_prediction_rolling_buffer_t calculated_temperatures; // rolling buffer holding corrected temperatures
+    float ema;
     temperature_prediction_rolling_buffer_t calculated_averages;     // rolling buffer holding averaged temperatures
-    
+        
     // settings
     float coefficient;                      // heat transfer coefficient
     int buffer_size;                        // how many raw datapoints shall be used for the estimation
