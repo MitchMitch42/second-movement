@@ -45,24 +45,21 @@ typedef struct {
     int length;              // current number of valid entries in the buffer
     int head_index;          // index of the most recent entry (-1 when empty)
     int max;                 // maximum capacity of the buffer
-} temperature_prediction_rolling_buffer_t;
+} temperature_prediction_rolling_buffer_t; //rolling buffer
 
 typedef struct {
-    // buffers
-    temperature_prediction_rolling_buffer_t buffer;                  // rolling buffer holding recent raw temperature samples
-    float ema;
+    temperature_prediction_rolling_buffer_t buffer; // rolling buffer holding recent raw temperature samples
+    float ema;                          // exponential moving average of the calculated end temperatures
     temperature_prediction_rolling_buffer_t calculated_averages;     // rolling buffer holding averaged temperatures
-        
+    temperature_prediction_mode_t mode; // current mode (waiting, running, setting, coefficient calculation, ...)
+    uint8_t settings_state;             // selected sub-setting index when in settings mode
+    bool show_real_temperature;         // if true: show the raw temperature, not the calculated one 
+    
     // settings
-    float coefficient;                      // heat transfer coefficient
-    int buffer_size;                        // how many raw datapoints shall be used for the estimation
-    int average_count;                      // number of calculated end temperatures to average
-    bool start_coefficient_calculation;     // to start the coefficient calculation process
-
-    temperature_prediction_mode_t mode;                               // current mode (waiting, running, setting, coefficient calculation, ...)
-    uint8_t settings_state;                                           // selected sub-setting index when in settings mode
-    bool show_real_temperature;                                       // if true: show the raw temperature, not the calculated one   
-
+    float coefficient;                  // heat transfer coefficient
+    int buffer_size;                    // how many raw datapoints shall be used for the estimation
+    int average_count;                  // time periods for ema
+    bool start_coefficient_calculation; // to start the coefficient calculation process
 } temperature_prediction_state_t;
 
 void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context_ptr);
