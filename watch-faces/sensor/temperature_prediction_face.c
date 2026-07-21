@@ -198,17 +198,22 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
             else watch_display_text(WATCH_POSITION_BOTTOM, "      ");
             break;
         case 2:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "UNI", "UN");
+            if (subsecond % 2) 
+                watch_display_text(WATCH_POSITION_SECONDS, state->use_imperial_units ? "#F" : "#C");
+            break;
         case 3:
         case 4:
         case 5:
         case 6:
         case 7:
+        case 8:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
             temperature_prediction_face_display_coefficient(state->coefficient);
             if (subsecond % 2) 
-                watch_display_string(" ", state->settings_state + 2);
+                watch_display_string(" ", state->settings_state + 1);
             break;
-        case 8:
+        case 9:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
             watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
             if (subsecond % 2) 
@@ -236,19 +241,22 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             else state->average_count = state->average_count - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count - 1;
             break;
         case 2:
+            state->use_imperial_units = !state->use_imperial_units;
+            break;
         case 3:
         case 4:
         case 5:
         case 6:
         case 7:
+        case 8:
             //set coefficient, increasing or decreasing one digit at a time, with wrap-around
             coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132
             step = 1;
-            for (int i = 0; i < 7 - state->settings_state; i++) step *= 10;
+            for (int i = 0; i < 8 - state->settings_state; i++) step *= 10;
             coeff += forward ? ((coeff / step) % 10 == 9 ? -9 * step : step) : ((coeff / step) % 10 == 0 ? 9 * step : -step);
             state->coefficient = ((float)coeff) / 100000;
             break;
-        case 8:
+        case 9:
             state->start_coefficient_calculation = !state->start_coefficient_calculation;
             break;
         default:
@@ -350,6 +358,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
 
 void temperature_prediction_face_activate(void *context) {
     movement_request_tick_frequency(1);
+    state->use_imperial_units = movement_use_imperial_units();
 }
 
 bool temperature_prediction_face_loop(movement_event_t event, void *context) {
@@ -371,16 +380,12 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     temperature_prediction_face_display_settings(state, event.subsecond);
                     if (state->settings_state > 8) { //last setting
                         movement_request_tick_frequency(1);
+                        movement_set_use_imperial_units(state->use_imperial_units);
                         temperature_prediction_face_start_logging(state, state->start_coefficient_calculation);
                     }
                     break;
             }
             break;
-        // case EVENT_LIGHT_BUTTON_UP:
-        //     if(state->debug) {
-        //         temperature_prediction_face_start_logging(state); //restart logging for debug only! TODO: make restart availabe for normal user?
-        //     }
-        //     break;
         case EVENT_LIGHT_LONG_PRESS:
             switch (state->mode) {
                 case temperature_prediction_coefficient:    
@@ -396,6 +401,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     break;
                 case temperature_prediction_setting: //exit settings
                     movement_request_tick_frequency(1);
+                    movement_set_use_imperial_units(state->use_imperial_units);
                     temperature_prediction_face_start_logging(state, state->start_coefficient_calculation);
                     break;
             }
@@ -426,9 +432,8 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     temperature_prediction_face_advance_settings(state, false);
                     temperature_prediction_face_display_settings(state, event.subsecond);
                     break;
-                case temperature_prediction_running: //toggle Celsius and Fahrenheit
-                    movement_set_use_imperial_units(!movement_use_imperial_units());
-                    temperature_prediction_face_update_display(state, -999);
+                case temperature_prediction_running: // restart logging (clear buffer)
+                    temperature_prediction_face_start_logging(state, false);
                     break;
                 case temperature_prediction_waiting: 
                     break;
