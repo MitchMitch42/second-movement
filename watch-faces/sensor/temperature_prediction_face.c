@@ -29,13 +29,12 @@
 
 // Default initial values
 #define TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT 0.002F
-#define TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE 60
-#define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT 30
+#define TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE 120
+#define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT 60
 
 // Constants for showing the predicted temperature
 #define TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX 120 //todo: check how many kb this takes
-#define TEMPERATURE_PREDICTION_AVERAGING_MAX 90
-#define TEMPERATURE_PREDICTION_AVERAGING_ERROR 60
+#define TEMPERATURE_PREDICTION_AVERAGING_MAX 99
 
 // Constants for coefficient calculation
 #define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES 5 //defines how long the temperature shall be constant to determine that equilibrium has been reached.
@@ -91,23 +90,12 @@ static void temperature_prediction_face_calculate_end_temperature_ema(temperatur
         float end_temperature = temperature_prediction_face_calculate_end_temperature(&state->buffer, state->coefficient);
         float alpha = 2.0f / (state->average_count + 1); // Alpha = 2 / (N + 1), where N is the number of periods
         state->ema = state->ema == -999 ? end_temperature : ((end_temperature * alpha) + (state->ema * (1 - alpha))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))
-        temperature_prediction_face_add_to_rolling_buffer(&state->calculated_averages, state->ema);
+        
+        float error = fabs(state->ema - end_temperature);
+        float alpha2 = 2.0f / (30 + 1); // Alpha = 2 / (N + 1), where N is the number of periods (TODO: currently fixed at 30)
+        state->ema_error = state->ema_error == -999 ? error : ((error * alpha2) + (state->ema_error * (1 - alpha2))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))       
     }
 }
-
-/// @brief calculate temperature deviation
-static float temperature_correction_face_calculate_error(temperature_prediction_state_t *state) {
-    if (state->calculated_averages.length < 1) {
-        return -1; 
-    }
-    float min = state->calculated_averages.data[0];
-    float max = state->calculated_averages.data[0];
-    for (int i = 1; i < state->calculated_averages.length; i++) {
-        if (state->calculated_averages.data[i] < min) min = state->calculated_averages.data[i]; // Update minimum
-        if (state->calculated_averages.data[i] > max) max = state->calculated_averages.data[i]; // Update maximum
-    }
-    return max - min;
-}      
 
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using all points and performing a linear regression of the transformed logarithmic curve
 static float temperature_prediction_face_calculate_coefficient_with_linear_regression(temperature_prediction_rolling_buffer_t *buffer, int end_temp_cnt, int ignore_start_cnt, float ignore_delta_temp) {
@@ -288,10 +276,9 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
         if (state->show_real_temperature) {
             watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
         } else {   
-            float error = temperature_correction_face_calculate_error(state);          
-            if (error < 1.0) {
-                int err = (int)(error * 10.0);
-                sprintf(buf, ",%1d", err);   
+            float error = state->ema_error == -999 ? 0 : (state->ema_error * 10.0);       
+            if (error > 99) {
+                sprintf(buf, "99");   
             } else {
                 int err = (int)(error + 0.5);
                 sprintf(buf, "%2d", err);   
@@ -320,8 +307,8 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
         state->mode = temperature_prediction_coefficient;
     } else {
         temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
-        temperature_prediction_face_init_rolling_buffer(&state->calculated_averages, TEMPERATURE_PREDICTION_AVERAGING_ERROR);
         state->ema = -999;
+        state->ema_error = -999;
         state->mode = temperature_prediction_running;
     }
     temperature_prediction_face_update_display_top_left(state);
@@ -342,7 +329,6 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
 
         temperature_prediction_state_t *state = (temperature_prediction_state_t *)*context_ptr;       
         state->buffer.data = malloc(TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX * sizeof(float));
-        state->calculated_averages.data = malloc(TEMPERATURE_PREDICTION_AVERAGING_ERROR * sizeof(float));
         
         state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;

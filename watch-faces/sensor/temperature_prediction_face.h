@@ -50,7 +50,7 @@ typedef struct {
 typedef struct {
     temperature_prediction_rolling_buffer_t buffer; // rolling buffer holding recent raw temperature samples
     float ema;                          // exponential moving average of the calculated end temperatures
-    temperature_prediction_rolling_buffer_t calculated_averages;     // rolling buffer holding averaged temperatures
+    float ema_error;                    // exponential moving average of the deviation of ema and the calculated end temperature
     temperature_prediction_mode_t mode; // current mode (waiting, running, setting, coefficient calculation, ...)
     uint8_t settings_state;             // selected sub-setting index when in settings mode
     bool show_real_temperature;         // if true: show the raw temperature, not the calculated one 
