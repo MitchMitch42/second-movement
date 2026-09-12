@@ -171,11 +171,6 @@ static void temperature_prediction_face_display_temperature(float temperature_c 
     else watch_display_float_with_best_effort(temperature_c, "#C");
 }
 
-static uint8_t temperature_prediction_face_get_next_settings_state(temperature_prediction_state_t *state) {
-    uint8_t next_state = state->settings_state + 1;
-    return next_state;
-}
-
 /// @brief display current settings on the watch face
 /// @param state face state containing settings values
 /// @param subsecond current subsecond value used for blink timing
@@ -200,7 +195,7 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
         case 2:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "UNI", "UN");
             if (subsecond % 2) 
-                watch_display_text(WATCH_POSITION_SECONDS, state->use_imperial_units ? "#F" : "#C");
+                watch_display_text(WATCH_POSITION_SECONDS, movement_use_imperial_units() ? "#F" : "#C");
             break;
         case 3:
         case 4:
@@ -241,7 +236,7 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
             else state->average_count = state->average_count - 1 < 1 ? TEMPERATURE_PREDICTION_AVERAGING_MAX : state->average_count - 1;
             break;
         case 2:
-            state->use_imperial_units = !state->use_imperial_units;
+            movement_set_use_imperial_units(!movement_use_imperial_units());
             break;
         case 3:
         case 4:
@@ -358,7 +353,6 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
 
 void temperature_prediction_face_activate(void *context) {
     movement_request_tick_frequency(1);
-    state->use_imperial_units = movement_use_imperial_units();
 }
 
 bool temperature_prediction_face_loop(movement_event_t event, void *context) {
@@ -376,11 +370,10 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     movement_illuminate_led();
                     break;
                 case temperature_prediction_setting: // flip through settings
-                    state->settings_state = temperature_prediction_face_get_next_settings_state(state);
+                    state->settings_state++;
                     temperature_prediction_face_display_settings(state, event.subsecond);
-                    if (state->settings_state > 8) { //last setting
+                    if (state->settings_state > 9) { //last setting
                         movement_request_tick_frequency(1);
-                        movement_set_use_imperial_units(state->use_imperial_units);
                         temperature_prediction_face_start_logging(state, state->start_coefficient_calculation);
                     }
                     break;
@@ -401,7 +394,6 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     break;
                 case temperature_prediction_setting: //exit settings
                     movement_request_tick_frequency(1);
-                    movement_set_use_imperial_units(state->use_imperial_units);
                     temperature_prediction_face_start_logging(state, state->start_coefficient_calculation);
                     break;
             }
