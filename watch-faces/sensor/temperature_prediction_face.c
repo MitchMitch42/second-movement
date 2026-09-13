@@ -97,6 +97,17 @@ static void temperature_prediction_face_calculate_end_temperature_ema(temperatur
     }
 }
 
+static float temperature_prediction_face_improve_ema(temperature_prediction_state_t *state) {
+    float m=0;
+    for (int i=state->buffer.head_index, j=0; j < state->buffer.length; j++, i = (i - 1 + state->buffer.length) % state->buffer.length) {
+        if (state->buffer.data[i] != state->buffer.data[state->buffer.head_index]) {
+            m = state->buffer.data[state->buffer.head_index] - state->buffer.data[i];
+            break;
+        }
+    }
+    return m < 0 ? state->ema - state->ema_error : m > 0 ? state->ema + state->ema_error : state->ema;
+}
+
 /// @brief calculate heat transfer coefficient of Newtons law of cooling, using all points and performing a linear regression of the transformed logarithmic curve
 static float temperature_prediction_face_calculate_coefficient_with_linear_regression(temperature_prediction_rolling_buffer_t *buffer, int end_temp_cnt, int ignore_start_cnt, float ignore_delta_temp) {
     //determine end temperature
@@ -427,7 +438,8 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
 
                     temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature()); 
                     temperature_prediction_face_calculate_end_temperature_ema(state);
-                    temperature_prediction_face_update_display(state, state->show_real_temperature || state->ema == -999 ? state->buffer.data[state->buffer.head_index] : state->ema);
+                    float temp_to_show = temperature_prediction_face_improve_ema(state);
+                    temperature_prediction_face_update_display(state, state->show_real_temperature || state->ema == -999 ? state->buffer.data[state->buffer.head_index] : temp_to_show);
                     break;
                 case temperature_prediction_setting: 
                     temperature_prediction_face_display_settings(state, event.subsecond);
