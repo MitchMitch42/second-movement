@@ -286,6 +286,8 @@ static void temperature_prediction_face_update_display_top_left(temperature_pred
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
     } else if (state->show_real_temperature) {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEM", "TE");
+    } else if (state->apply_hack) {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "HAC", "HC");
     } else {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "EST", "ET");
     }
@@ -321,6 +323,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
         state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
         state->show_real_temperature = true;
+        state->apply_hack = false;
     }
 }
 
@@ -377,8 +380,20 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     temperature_prediction_face_start_logging(state, false);
                     break;
                 case temperature_prediction_coefficient: //fallthrough
-                case temperature_prediction_running: //toggle "show real temp"
                     state->show_real_temperature = !state->show_real_temperature;
+                    break;
+                case temperature_prediction_running: //toggle "show real temp" 
+                    if(state->show_real_temperature) {
+                        state->show_real_temperature = false;
+                        state->apply_hack = false;
+                    } else if (state->apply_hack) {
+                        state->apply_hack = false;
+                        state->show_real_temperature = true;
+                    } else {
+                        state->apply_hack = true;
+                        state->show_real_temperature = false;
+                    }
+                    
                     temperature_prediction_face_update_display_top_left(state);
                     temperature_prediction_face_update_display(state, -999);
                     break;
@@ -428,7 +443,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
 
                     temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature()); 
                     temperature_prediction_face_calculate_ema(state);
-                    float temp_to_show = temperature_prediction_face_improve_ema(state);
+                    float temp_to_show = state->apply_hack ? temperature_prediction_face_improve_ema(state) : state->ema;
                     temperature_prediction_face_update_display(state, state->show_real_temperature || state->ema == -999 ? state->buffer.data[state->buffer.head_index] : temp_to_show);
                     break;
                 case temperature_prediction_setting: 

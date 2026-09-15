@@ -52,9 +52,10 @@ typedef struct {
     float ema;                          // exponential moving average of the calculated end temperatures
     float ema_error;                    // exponential moving average of the deviation of ema and the calculated end temperature
     temperature_prediction_mode_t mode; // current mode (waiting, running, setting, coefficient calculation, ...)
-    uint8_t settings_state;             // selected sub-setting index when in settings mode
+    uint8_t settings_state;             // selected setting when in settings mode
     bool show_real_temperature;         // if true: show the raw temperature, not the calculated one 
-    bool quick_ticks_running;             // if true: the user is holding down button to quickly advance through settings
+    bool quick_ticks_running;           // if true: the user is holding down button to quickly advance through settings
+    bool apply_hack;                    // ~**~
 
     // settings
     float coefficient;                  // heat transfer coefficient
