@@ -91,7 +91,9 @@ static void temperature_prediction_face_calculate_ema(temperature_prediction_sta
         float end_temperature = temperature_prediction_face_calculate_end_temperature(&state->buffer, state->coefficient);
         float alpha = 2.0f / (state->average_count + 1); // Alpha = 2 / (N + 1), where N is the number of periods
         state->ema = state->ema == -999 ? end_temperature : ((end_temperature * alpha) + (state->ema * (1 - alpha))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))
-        
+        if (fabs(state->ema - end_temperature) > ((float)state->cap) / 2.0) { //if the difference between the end temperature and the EMA is too big, reset the EMA to the end temperature
+            state->ema = end_temperature;
+        }
         float error = fabs(state->ema - end_temperature);
         float alpha2 = 2.0f / (30 + 1); // Alpha = 2 / (N + 1), where N is the number of periods (TODO: currently fixed at 30)
         state->ema_error = state->ema_error == -999 ? error : ((error * alpha2) + (state->ema_error * (1 - alpha2))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))       
@@ -174,7 +176,8 @@ static void temperature_prediction_face_display_temperature(float temperature_c 
 /// @brief display current settings on the watch face
 /// @param state face state containing settings values
 /// @param subsecond current subsecond value used for blink timing
-static void temperature_prediction_face_display_settings(temperature_prediction_state_t *state, uint8_t subsecond) {
+/// @return false if invalid setting state
+static bool temperature_prediction_face_display_settings(temperature_prediction_state_t *state, uint8_t subsecond) {
     char buf[8];
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "      ", "      ");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
@@ -191,23 +194,32 @@ static void temperature_prediction_face_display_settings(temperature_prediction_
         if (subsecond % 2 || state->quick_ticks_running) watch_display_text(WATCH_POSITION_BOTTOM, buf);
         else watch_display_text(WATCH_POSITION_BOTTOM, "      ");
     } 
-    else if (state->settings_state == 2) { //units
+    else if(state->settings_state == 2) { //cap
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "CAP", "CA");
+        sprintf(buf, "%6d", state->cap);
+        if (subsecond % 2 || state->quick_ticks_running) watch_display_text(WATCH_POSITION_BOTTOM, buf);
+        else watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    }
+    else if (state->settings_state == 3) { //units
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "UNI", "UN");
         if (subsecond % 2 || state->quick_ticks_running) 
             watch_display_text(WATCH_POSITION_SECONDS, movement_use_imperial_units() ? "#F" : "#C");
     } 
-    else if (state->settings_state >= 3 && state->settings_state <= 8) { //coefficient
+    else if (state->settings_state >= 4 && state->settings_state <= 9) { //coefficient
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
         temperature_prediction_face_display_coefficient(state->coefficient);
         if (subsecond % 2 && !state->quick_ticks_running) 
             watch_display_string(" ", state->settings_state + 1);
     } 
-    else if (state->settings_state == 9) { //start coefficient calculation
+    else if (state->settings_state == 10) { //start coefficient calculation
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
         watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
         if (subsecond % 2 || state->quick_ticks_running) 
             watch_display_text(WATCH_POSITION_SECONDS, state->start_coefficient_calculation ? " y" : " n");
+    } else {
+        return false; 
     }
+    return true;
 }
 
 /// @brief advance the active setting value up or down
@@ -223,18 +235,21 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
     else if (state->settings_state == 1) { //average count
         state->average_count = state->average_count + 1 > TEMPERATURE_PREDICTION_AVERAGING_MAX ? 1 : state->average_count + 1;
     } 
-    else if (state->settings_state == 2) { //units
+    else if (state->settings_state == 2) { //cap
+        state->cap = state->cap + 1 > 30 ? 0 : state->cap + 1;
+    }
+    else if (state->settings_state == 3) { //units
         movement_set_use_imperial_units(!movement_use_imperial_units());
     } 
-    else if (state->settings_state >= 3 && state->settings_state <= 8) { //coefficient
+    else if (state->settings_state >= 4 && state->settings_state <= 9) { //coefficient
         //set coefficient, increasing or decreasing one digit at a time, with wrap-around
         coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132
         step = 1;
-        for (int i = 0; i < 8 - state->settings_state; i++) step *= 10;
+        for (int i = 0; i < 9 - state->settings_state; i++) step *= 10;
         coeff += ((coeff / step) % 10 == 9 ? -9 * step : step);
         state->coefficient = ((float)coeff) / 100000;
     } 
-    else if (state->settings_state == 9) { //start coefficient calculation
+    else if (state->settings_state == 10) { //start coefficient calculation
         state->start_coefficient_calculation = !state->start_coefficient_calculation;
     }
 }
@@ -347,8 +362,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     break;
                 case temperature_prediction_setting: // flip through settings
                     state->settings_state++;
-                    temperature_prediction_face_display_settings(state, event.subsecond);
-                    if (state->settings_state > 9) { //last setting
+                    if (!temperature_prediction_face_display_settings(state, event.subsecond)) { //last setting
                         movement_request_tick_frequency(1);
                         temperature_prediction_face_start_logging(state, state->start_coefficient_calculation);
                     }
