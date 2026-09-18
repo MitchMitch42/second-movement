@@ -60,6 +60,7 @@ const watch_face_t watch_faces[] = {
  */
 #define MOVEMENT_SECONDARY_FACE_INDEX (MOVEMENT_NUM_FACES - 14)
 #define MOVEMENT_TERTIARY_FACE_INDEX (MOVEMENT_NUM_FACES - 7)
+#define MOVEMENT_TERTIARY_FACE_INDEX (MOVEMENT_NUM_FACES - 2)
 
 /* Custom hourly chime tune. Check movement_custom_signal_tunes.h for options. */
 #define SIGNAL_TUNE_DEFAULT
