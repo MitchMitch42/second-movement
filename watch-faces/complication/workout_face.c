@@ -20,7 +20,7 @@ typedef enum {
     SW_STATUS_IDLE = 0,
     SW_STATUS_RUNNING,
     SW_STATUS_STOPPED,
-    
+    SW_STATUS_CLEAR,
 } stopwatch_status_t;
 
 static inline void _button_beep() {
@@ -35,6 +35,11 @@ static const uint8_t DISPLAY_RUNNING_RATE = 32;
 ///        on the lcd.
 /// @param ticks
 static void _display_elapsed(workout_state_t *state, uint32_t ticks) {
+    if (state->status == SW_STATUS_CLEAR) {
+        watch_display_text(WATCH_POSITION_BOTTOM, state->clear_yes ? "CLEAry" : "CLEArn");
+        return;
+    }
+
     char buf[3];
     uint8_t sec_100 = (ticks & 0x7F) * 100 / 128;
 
@@ -110,6 +115,7 @@ static uint8_t get_refresh_rate(workout_state_t *state) {
             return DISPLAY_RUNNING_RATE;
         case SW_STATUS_STOPPED:
         case SW_STATUS_IDLE:
+        case SW_STATUS_CLEAR:
         default:
             return 1;
     }
@@ -123,6 +129,7 @@ static uint32_t elapsed_time(workout_state_t *state, rtc_counter_t counter) {
         case SW_STATUS_RUNNING:
             return counter - state->start_counter;
 
+        case SW_STATUS_CLEAR:
         case SW_STATUS_STOPPED:
             return state->stop_counter - state->start_counter;
 
@@ -173,7 +180,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
     switch (state->status) {
         case SW_STATUS_IDLE:
             switch (event_type) {
-                case EVENT_ALARM_BUTTON_DOWN:
+                case EVENT_ALARM_BUTTON_UP:
                     state->status = SW_STATUS_RUNNING;
                     state->start_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
@@ -184,7 +191,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
 
         case SW_STATUS_RUNNING:
             switch (event_type) {
-                case EVENT_ALARM_BUTTON_DOWN:
+                case EVENT_ALARM_BUTTON_UP:
                     state->status = SW_STATUS_STOPPED;
                     state->stop_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
@@ -199,22 +206,36 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->status = SW_STATUS_RUNNING;
                     state->start_counter = counter - state->stop_counter + state->start_counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
-                    state->clear_confirm = false;
                     return;
-                case EVENT_ALARM_LONG_PRESS: 
-                    state->status = SW_STATUS_IDLE;
+                case EVENT_ALARM_LONG_PRESS:
                     workout_face_add_elapsed_to_day_buffer(state, elapsed_time(state, counter));
-                    state->clear_confirm = false;
                     return;
                 case EVENT_LIGHT_LONG_PRESS:
-                    if (state->clear_confirm) {
+                    state->status = SW_STATUS_CLEAR;
+                    state->clear_yes = false;
+                    return;
+                default:
+                    return;
+            }
+
+        case SW_STATUS_CLEAR:
+            switch (event_type) {
+                case EVENT_ALARM_BUTTON_UP:
+                    state->clear_yes = !state->clear_yes;
+                    return;
+                case EVENT_LIGHT_BUTTON_DOWN:
+                    //force full redraw
+                    state->old_display.seconds = UINT_MAX;
+                    state->old_display.minutes = UINT_MAX;
+                    state->old_display.hours = UINT_MAX;
+                    if (state->clear_yes) {
                         state->status = SW_STATUS_IDLE;
                         state->start_counter = 0;
                         state->stop_counter = 0;
-                        state->clear_confirm = false;
-                        return;
+                    } else {
+                        state->status = SW_STATUS_STOPPED;
                     }
-                    state->clear_confirm = true;
+                    state->clear_yes = false;
                     return;
                 default:
                     return;
@@ -234,7 +255,7 @@ void workout_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         state->start_counter = 0;
         state->stop_counter = 0;
         state->status = SW_STATUS_IDLE;
-        state->clear_confirm = false;
+        state->clear_yes = false;
     }
 }
 
@@ -260,25 +281,16 @@ bool workout_face_loop(movement_event_t event, void *context) {
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "STW", "ST");
             _draw_indicators(state, event, elapsed);
             _display_elapsed(state, elapsed);
-            if (state->clear_confirm) {
-                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "CLEAR", "CL");
-            }
             break;
-        case EVENT_ALARM_BUTTON_DOWN:
         case EVENT_ALARM_BUTTON_UP:
         case EVENT_ALARM_LONG_PRESS:
         case EVENT_LIGHT_LONG_PRESS:
+        case EVENT_LIGHT_BUTTON_DOWN:
             _button_beep();
-            if (state->clear_confirm) {
-                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "CLEAR", "CL");
-            }
             // fall through
         case EVENT_TICK:
             _draw_indicators(state, event, elapsed);
             _display_elapsed(state, elapsed);
-            if (state->clear_confirm) {
-                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "CLEAR", "CL");
-            }
             break;
         default:
             movement_default_loop_handler(event);
