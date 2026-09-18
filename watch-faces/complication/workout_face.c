@@ -88,7 +88,6 @@ static void _draw_indicators(workout_state_t *state, movement_event_t event, uin
             subsecond = elapsed & 127;
             tock = subsecond >= 64;
 
-            watch_clear_indicator(WATCH_INDICATOR_LAP);
             if (tock) {
                 watch_clear_colon();
             } else {
@@ -100,7 +99,6 @@ static void _draw_indicators(workout_state_t *state, movement_event_t event, uin
         case SW_STATUS_STOPPED:
         case SW_STATUS_IDLE:
         default:
-            watch_clear_indicator(WATCH_INDICATOR_LAP);
             watch_set_colon();
             return;
     }
@@ -143,7 +141,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
 
         case SW_STATUS_STOPPED:
             switch (event_type) {
-                case EVENT_ALARM_BUTTON_DOWN:
+                case EVENT_ALARM_BUTTON_UP:
                     state->status = SW_STATUS_RUNNING;
                     state->start_counter = counter - state->stop_counter + state->start_counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
@@ -212,8 +210,9 @@ bool workout_face_loop(movement_event_t event, void *context) {
             _display_elapsed(state, elapsed);
             break;
         case EVENT_ALARM_BUTTON_DOWN:
+        case EVENT_ALARM_BUTTON_UP:
+        case EVENT_ALARM_LONG_PRESS:
         case EVENT_LIGHT_BUTTON_DOWN:
-        case EVENT_LIGHT_LONG_PRESS:
             _button_beep();
             // fall through
         case EVENT_TICK:
