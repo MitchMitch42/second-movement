@@ -18,7 +18,7 @@
 
 typedef struct {
     uint32_t day_index;
-    uint32_t total_seconds;
+    uint32_t timestamp; // elapsed time for the day in hundredths of a second
 } workout_day_total_t;
 
 typedef struct {
