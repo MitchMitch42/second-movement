@@ -21,6 +21,7 @@ typedef enum {
     SW_STATUS_RUNNING,
     SW_STATUS_STOPPED,
     SW_STATUS_CLEAR,
+    SW_STATUS_LOG,
 } stopwatch_status_t;
 
 static inline void _button_beep() {
@@ -31,12 +32,40 @@ static inline void _button_beep() {
 // This is just for looks, timekeeping is always accurate to 128Hz
 static const uint8_t DISPLAY_RUNNING_RATE = 32;
 
+static void workout_face_show_day_log(workout_state_t *state) {
+    char bottom[8];
+    char top_right[3];
+    uint32_t today_day_index = movement_get_utc_timestamp() / 86400U;
+    uint32_t total_seconds = 0;
+
+    for (uint8_t i = 0; i < state->day_count; i++) {
+        if (state->day_totals[i].day_index == today_day_index) {
+            total_seconds = state->day_totals[i].total_seconds;
+            break;
+        }
+    }
+
+    uint32_t hours = total_seconds / 3600U;
+    uint32_t minutes = (total_seconds % 3600U) / 60U;
+    uint32_t seconds = total_seconds % 60U;
+    sprintf(bottom, "%02lu%02lu%02lu", hours, minutes, seconds);
+    watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, bottom, bottom);
+
+    sprintf(top_right, "%02u", movement_get_local_date_time().unit.day);
+    watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
+}
+
 /// @brief Display minutes, seconds and fractions derived from 128 Hz tick counter
 ///        on the lcd.
 /// @param ticks
 static void _display_elapsed(workout_state_t *state, uint32_t ticks) {
     if (state->status == SW_STATUS_CLEAR) {
         watch_display_text(WATCH_POSITION_BOTTOM, state->clear_yes ? "CLEAry" : "CLEArn");
+        return;
+    }
+
+    if (state->status == SW_STATUS_LOG) {
+        workout_face_show_day_log(state);
         return;
     }
 
@@ -116,6 +145,7 @@ static uint8_t get_refresh_rate(workout_state_t *state) {
         case SW_STATUS_STOPPED:
         case SW_STATUS_IDLE:
         case SW_STATUS_CLEAR:
+        case SW_STATUS_LOG:
         default:
             return 1;
     }
@@ -184,6 +214,10 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->status = SW_STATUS_RUNNING;
                     state->start_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
+                    return;   
+                case EVENT_LIGHT_BUTTON_UP:
+                    state->old_status = state->status;
+                    state->status = SW_STATUS_LOG;
                     return;
                 default:
                     return;
@@ -209,10 +243,17 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     return;
                 case EVENT_ALARM_LONG_PRESS:
                     workout_face_add_elapsed_to_day_buffer(state, elapsed_time(state, counter));
+                    state->status = SW_STATUS_IDLE;
+                    state->start_counter = 0;
+                    state->stop_counter = 0;
                     return;
                 case EVENT_LIGHT_LONG_PRESS:
                     state->status = SW_STATUS_CLEAR;
                     state->clear_yes = false;
+                    return;
+                case EVENT_LIGHT_BUTTON_UP:
+                    state->old_status = state->status;
+                    state->status = SW_STATUS_LOG;
                     return;
                 default:
                     return;
@@ -223,7 +264,8 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                 case EVENT_ALARM_BUTTON_UP:
                     state->clear_yes = !state->clear_yes;
                     return;
-                case EVENT_LIGHT_BUTTON_DOWN:
+                case EVENT_LIGHT_LONG_PRESS:
+                case EVENT_LIGHT_BUTTON_UP:
                     //force full redraw
                     state->old_display.seconds = UINT_MAX;
                     state->old_display.minutes = UINT_MAX;
@@ -236,6 +278,18 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                         state->status = SW_STATUS_STOPPED;
                     }
                     state->clear_yes = false;
+                    return;
+                default:
+                    return;
+            }
+
+        case SW_STATUS_LOG:
+            switch (event_type) {
+                case EVENT_LIGHT_BUTTON_UP:
+                    state->status = state->old_status;
+                    state->old_display.seconds = UINT_MAX;
+                    state->old_display.minutes = UINT_MAX;
+                    state->old_display.hours = UINT_MAX;
                     return;
                 default:
                     return;
@@ -282,10 +336,12 @@ bool workout_face_loop(movement_event_t event, void *context) {
             _draw_indicators(state, event, elapsed);
             _display_elapsed(state, elapsed);
             break;
+        case EVENT_LIGHT_BUTTON_DOWN:
+            break; 
         case EVENT_ALARM_BUTTON_UP:
         case EVENT_ALARM_LONG_PRESS:
+        case EVENT_LIGHT_BUTTON_UP:
         case EVENT_LIGHT_LONG_PRESS:
-        case EVENT_LIGHT_BUTTON_DOWN:
             _button_beep();
             // fall through
         case EVENT_TICK:
