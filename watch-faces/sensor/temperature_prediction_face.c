@@ -67,7 +67,8 @@ static void temperature_prediction_face_add_to_rolling_buffer(temperature_predic
 }
 
 /// @brief calculate end temperature with a closed-form least squares solution of Newton's law of cooling, performing a linear regression on the linearized exponential temperature curve
-static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_rolling_buffer_t *buffer, float coefficient) {
+/// and the residual variance of the linearized exponential fit
+static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_rolling_buffer_t *buffer, float coefficient, float *variance_out) {
     const float alpha = expf(-coefficient); // dt = 1s
     float numerator = 0.0f;
     float denominator = 0.0f;
@@ -82,13 +83,41 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
         e *= alpha;
         index = (index + 1) % buffer->length;
     }
-    return denominator <= 0.0f ? t0 : (numerator / denominator);
+
+    const float end_temp = denominator <= 0.0f ? t0 : (numerator / denominator);
+
+    if (variance_out != NULL) {
+        float ss_res = 0.0f;
+        float count = 0.0f;
+        uint16_t linear_index = (buffer->head_index + 1) % buffer->length;
+        const float t_start = buffer->data[linear_index];
+
+        for (uint16_t i = 0; i < buffer->length; i++) {
+            const float value = buffer->data[linear_index];
+            const float delta = value - end_temp;
+            if (delta > 0.0f) {
+                const float x = (float)i;
+                const float y = logf(delta);
+                const float y_expected = logf(t_start - end_temp) - coefficient * x;
+                const float residual = y - y_expected;
+                ss_res += residual * residual;
+                count += 1.0f;
+            }
+            linear_index = (linear_index + 1) % buffer->length;
+        }
+
+        *variance_out = count > 0.0f ? (ss_res / count) : 0.0f;
+    }
+
+    return end_temp;
 }
 
 // @brief calculate the exponential moving average of the end temperature and the error of the end temperature
 static void temperature_prediction_face_calculate_ema(temperature_prediction_state_t *state) {
     if (state->buffer.length > 1) {
-        float end_temperature = temperature_prediction_face_calculate_end_temperature(&state->buffer, state->coefficient);
+        float variance = 0.0f;
+        float end_temperature = temperature_prediction_face_calculate_end_temperature(&state->buffer, state->coefficient, &variance);
+        (void)variance;
         float alpha = 2.0f / (state->average_count + 1); // Alpha = 2 / (N + 1), where N is the number of periods
         state->ema = state->ema == -999 ? end_temperature : ((end_temperature * alpha) + (state->ema * (1 - alpha))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))
         if (fabs(state->ema - end_temperature) > ((float)state->cap) / 2.0) { //if the difference between the end temperature and the EMA is too big, reset the EMA to the end temperature
@@ -209,7 +238,7 @@ static bool temperature_prediction_face_display_settings(temperature_prediction_
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
         temperature_prediction_face_display_coefficient(state->coefficient);
         if (subsecond % 2 && !state->quick_ticks_running) 
-            watch_display_string(" ", state->settings_state + 1);
+            watch_display_string(" ", state->settings_state);
     } 
     else if (state->settings_state == 10) { //start coefficient calculation
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
@@ -337,6 +366,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
         state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
+        state->cap = 30;
         state->show_real_temperature = true;
         state->apply_hack = false;
     }
