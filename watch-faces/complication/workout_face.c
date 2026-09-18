@@ -115,6 +115,60 @@ static uint8_t get_refresh_rate(workout_state_t *state) {
     }
 }
 
+static uint32_t elapsed_time(workout_state_t *state, rtc_counter_t counter) {
+    switch (state->status) {
+        case SW_STATUS_IDLE:
+            return 0;
+
+        case SW_STATUS_RUNNING:
+            return counter - state->start_counter;
+
+        case SW_STATUS_STOPPED:
+            return state->stop_counter - state->start_counter;
+
+        default:
+            return 0;
+    }
+}
+
+static void workout_face_add_elapsed_to_day_buffer(workout_state_t *state, uint32_t elapsed_seconds) {
+    if (elapsed_seconds == 0) {
+        return;
+    }
+
+    uint32_t today_day_index = movement_get_utc_timestamp() / 86400U;
+    uint8_t match_index = UINT8_MAX;
+
+    for (uint8_t i = 0; i < state->day_count; i++) {
+        if (state->day_totals[i].day_index == today_day_index) {
+            match_index = i;
+            break;
+        }
+    }
+
+    if (match_index != UINT8_MAX) {
+        state->day_totals[match_index].total_seconds += elapsed_seconds;
+        return;
+    }
+
+    if (state->day_count < WORKOUT_HISTORY_DAYS) {
+        state->day_totals[state->day_count].day_index = today_day_index;
+        state->day_totals[state->day_count].total_seconds = elapsed_seconds;
+        state->day_count++;
+        return;
+    }
+
+    uint8_t oldest_index = 0;
+    for (uint8_t i = 1; i < WORKOUT_HISTORY_DAYS; i++) {
+        if (state->day_totals[i].day_index < state->day_totals[oldest_index].day_index) {
+            oldest_index = i;
+        }
+    }
+
+    state->day_totals[oldest_index].day_index = today_day_index;
+    state->day_totals[oldest_index].total_seconds = elapsed_seconds;
+}
+
 static void state_transition(workout_state_t *state, rtc_counter_t counter, movement_event_type_t event_type) {
     switch (state->status) {
         case SW_STATUS_IDLE:
@@ -145,9 +199,22 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->status = SW_STATUS_RUNNING;
                     state->start_counter = counter - state->stop_counter + state->start_counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
+                    state->clear_confirm = false;
                     return;
-                case EVENT_LIGHT_BUTTON_DOWN:
+                case EVENT_ALARM_LONG_PRESS: 
                     state->status = SW_STATUS_IDLE;
+                    workout_face_add_elapsed_to_day_buffer(state, elapsed_time(state, counter));
+                    state->clear_confirm = false;
+                    return;
+                case EVENT_LIGHT_LONG_PRESS:
+                    if (state->clear_confirm) {
+                        state->status = SW_STATUS_IDLE;
+                        state->start_counter = 0;
+                        state->stop_counter = 0;
+                        state->clear_confirm = false;
+                        return;
+                    }
+                    state->clear_confirm = true;
                     return;
                 default:
                     return;
@@ -155,22 +222,6 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
 
         default:
             return;
-    }
-}
-
-static uint32_t elapsed_time(workout_state_t *state, rtc_counter_t counter) {
-    switch (state->status) {
-        case SW_STATUS_IDLE:
-            return 0;
-
-        case SW_STATUS_RUNNING:
-            return counter - state->start_counter;
-
-        case SW_STATUS_STOPPED:
-            return state->stop_counter - state->start_counter;
-
-        default:
-            return 0;
     }
 }
 
@@ -183,6 +234,7 @@ void workout_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         state->start_counter = 0;
         state->stop_counter = 0;
         state->status = SW_STATUS_IDLE;
+        state->clear_confirm = false;
     }
 }
 
@@ -208,16 +260,25 @@ bool workout_face_loop(movement_event_t event, void *context) {
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "STW", "ST");
             _draw_indicators(state, event, elapsed);
             _display_elapsed(state, elapsed);
+            if (state->clear_confirm) {
+                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "CLEAR", "CL");
+            }
             break;
         case EVENT_ALARM_BUTTON_DOWN:
         case EVENT_ALARM_BUTTON_UP:
         case EVENT_ALARM_LONG_PRESS:
-        case EVENT_LIGHT_BUTTON_DOWN:
+        case EVENT_LIGHT_LONG_PRESS:
             _button_beep();
+            if (state->clear_confirm) {
+                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "CLEAR", "CL");
+            }
             // fall through
         case EVENT_TICK:
             _draw_indicators(state, event, elapsed);
             _display_elapsed(state, elapsed);
+            if (state->clear_confirm) {
+                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "CLEAR", "CL");
+            }
             break;
         default:
             movement_default_loop_handler(event);

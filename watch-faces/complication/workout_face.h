@@ -14,10 +14,20 @@
 
 #include "movement.h"
 
+#define WORKOUT_HISTORY_DAYS 10U
+
+typedef struct {
+    uint32_t day_index;
+    uint32_t total_seconds;
+} workout_day_total_t;
+
 typedef struct {
     rtc_counter_t start_counter; // rtc counter when the stopwatch was started
     rtc_counter_t stop_counter;  // rtc counter when the stopwatch was stopped
     uint8_t status;              // the status the stopwatch is in (idle, running, stopped)
+    uint8_t day_count;           // number of days currently tracked in the rolling buffer
+    bool clear_confirm;          // set while the user is confirming a clear action
+    workout_day_total_t day_totals[WORKOUT_HISTORY_DAYS];
     struct {
         rtc_counter_t seconds;
         rtc_counter_t minutes;
