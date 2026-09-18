@@ -18,7 +18,6 @@ typedef struct {
     rtc_counter_t start_counter; // rtc counter when the stopwatch was started
     rtc_counter_t stop_counter;  // rtc counter when the stopwatch was stopped
     uint8_t status;              // the status the stopwatch is in (idle, running, stopped)
-    bool slow_refresh;           // update the display slowly (same 128Hz timekeeping accuracy)
     struct {
         rtc_counter_t seconds;
         rtc_counter_t minutes;

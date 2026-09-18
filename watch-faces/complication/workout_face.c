@@ -30,23 +30,16 @@ static inline void _button_beep() {
 // How quickly should the elapsing time be displayed?
 // This is just for looks, timekeeping is always accurate to 128Hz
 static const uint8_t DISPLAY_RUNNING_RATE = 32;
-static const uint8_t DISPLAY_RUNNING_RATE_SLOW = 2;
 
 /// @brief Display minutes, seconds and fractions derived from 128 Hz tick counter
 ///        on the lcd.
 /// @param ticks
 static void _display_elapsed(workout_state_t *state, uint32_t ticks) {
     char buf[3];
+    uint8_t sec_100 = (ticks & 0x7F) * 100 / 128;
 
-    if (state->slow_refresh && (state->status == SW_STATUS_RUNNING || state->status == SW_STATUS_IDLE)) {
-        watch_display_character_lp_seconds(' ', 8);
-        watch_display_character_lp_seconds(' ', 9);
-    } else {
-        uint8_t sec_100 = (ticks & 0x7F) * 100 / 128;
-
-        watch_display_character_lp_seconds('0' + sec_100 / 10, 8);
-        watch_display_character_lp_seconds('0' + sec_100 % 10, 9);
-    }
+    watch_display_character_lp_seconds('0' + sec_100 / 10, 8);
+    watch_display_character_lp_seconds('0' + sec_100 % 10, 9);
 
     uint32_t seconds = ticks >> 7;
 
@@ -116,11 +109,7 @@ static void _draw_indicators(workout_state_t *state, movement_event_t event, uin
 static uint8_t get_refresh_rate(workout_state_t *state) {
     switch (state->status) {
         case SW_STATUS_RUNNING:
-            if (state->slow_refresh) {
-                return DISPLAY_RUNNING_RATE_SLOW;
-            } else {
-                return DISPLAY_RUNNING_RATE;
-            }
+            return DISPLAY_RUNNING_RATE;
         case SW_STATUS_STOPPED:
         case SW_STATUS_IDLE:
         default:
@@ -137,9 +126,6 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->start_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
                     return;
-                case EVENT_LIGHT_LONG_PRESS:
-                    state->slow_refresh = !state->slow_refresh;
-                    return;
                 default:
                     return;
             }
@@ -149,10 +135,6 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                 case EVENT_ALARM_BUTTON_DOWN:
                     state->status = SW_STATUS_STOPPED;
                     state->stop_counter = counter;
-                    movement_request_tick_frequency(get_refresh_rate(state));
-                    return;
-                case EVENT_LIGHT_LONG_PRESS:
-                    state->slow_refresh = !state->slow_refresh;
                     movement_request_tick_frequency(get_refresh_rate(state));
                     return;
                 default:
