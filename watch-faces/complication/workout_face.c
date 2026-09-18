@@ -19,9 +19,8 @@
 typedef enum {
     SW_STATUS_IDLE = 0,
     SW_STATUS_RUNNING,
-    SW_STATUS_RUNNING_LAPPING,
     SW_STATUS_STOPPED,
-    SW_STATUS_STOPPED_LAPPING
+    
 } stopwatch_status_t;
 
 static inline void _button_beep() {
@@ -105,25 +104,6 @@ static void _draw_indicators(workout_state_t *state, movement_event_t event, uin
 
             return;
 
-        case SW_STATUS_RUNNING_LAPPING:
-            tock = event.subsecond > 0;
-
-            if (tock) {
-                watch_clear_indicator(WATCH_INDICATOR_LAP);
-                watch_clear_colon();
-            } else {
-                watch_set_indicator(WATCH_INDICATOR_LAP);
-                watch_set_colon();
-            }
-
-            return;
-
-        case SW_STATUS_STOPPED_LAPPING:
-            watch_set_indicator(WATCH_INDICATOR_LAP);
-            watch_set_colon();
-
-            return;
-
         case SW_STATUS_STOPPED:
         case SW_STATUS_IDLE:
         default:
@@ -141,8 +121,6 @@ static uint8_t get_refresh_rate(workout_state_t *state) {
             } else {
                 return DISPLAY_RUNNING_RATE;
             }
-        case SW_STATUS_RUNNING_LAPPING:
-            return 2;
         case SW_STATUS_STOPPED:
         case SW_STATUS_IDLE:
         default:
@@ -173,46 +151,9 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->stop_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
                     return;
-                case EVENT_LIGHT_BUTTON_DOWN:
-                    state->status = SW_STATUS_RUNNING_LAPPING;
-                    state->lap_counter = counter;
-                    movement_request_tick_frequency(get_refresh_rate(state));
-                    return;
-                default:
-                    return;
-            }
-
-        case SW_STATUS_RUNNING_LAPPING:
-            switch (event_type) {
-                case EVENT_ALARM_BUTTON_DOWN:
-                    state->status = SW_STATUS_STOPPED_LAPPING;
-                    state->stop_counter = counter;
-                    movement_request_tick_frequency(get_refresh_rate(state));
-                    return;
-                case EVENT_LIGHT_BUTTON_DOWN:
-                    state->status = SW_STATUS_RUNNING;
-                    state->lap_counter = counter;
-                    movement_request_tick_frequency(get_refresh_rate(state));
-                    return;
                 case EVENT_LIGHT_LONG_PRESS:
-                    state->status = SW_STATUS_RUNNING;
                     state->slow_refresh = !state->slow_refresh;
                     movement_request_tick_frequency(get_refresh_rate(state));
-                    return;
-                default:
-                    return;
-            }
-
-        case SW_STATUS_STOPPED_LAPPING:
-            switch (event_type) {
-                case EVENT_ALARM_BUTTON_DOWN:
-                    state->status = SW_STATUS_RUNNING_LAPPING;
-                    state->start_counter = counter - state->stop_counter + state->start_counter;
-                    state->lap_counter = counter - state->stop_counter + state->lap_counter;
-                    movement_request_tick_frequency(get_refresh_rate(state));
-                    return;
-                case EVENT_LIGHT_BUTTON_DOWN:
-                    state->status = SW_STATUS_STOPPED;
                     return;
                 default:
                     return;
@@ -245,10 +186,6 @@ static uint32_t elapsed_time(workout_state_t *state, rtc_counter_t counter) {
         case SW_STATUS_RUNNING:
             return counter - state->start_counter;
 
-        case SW_STATUS_RUNNING_LAPPING:
-        case SW_STATUS_STOPPED_LAPPING:
-            return state->lap_counter - state->start_counter;
-
         case SW_STATUS_STOPPED:
             return state->stop_counter - state->start_counter;
 
@@ -265,7 +202,6 @@ void workout_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         workout_state_t *state = (workout_state_t *)*context_ptr;
         state->start_counter = 0;
         state->stop_counter = 0;
-        state->lap_counter = 0;
         state->status = SW_STATUS_IDLE;
     }
 }
