@@ -35,23 +35,21 @@ static const uint8_t DISPLAY_RUNNING_RATE = 32;
 static void workout_face_show_day_log(workout_state_t *state) {
     char bottom[8];
     char top_right[3];
-    uint32_t today_day_index = movement_get_utc_timestamp() / 86400U;
-    uint32_t total_timestamp = 0;
-
-    for (uint8_t i = 0; i < state->day_count; i++) {
-        if (state->day_totals[i].day_index == today_day_index) {
-            total_timestamp = state->day_totals[i].timestamp;
-            break;
-        }
+    if (state->day_count == 0) {
+        watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "no dat", "no dat");
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "  ", "  ");
+        return;
     }
+    uint32_t total_timestamp = state->day_totals[state->log_index].timestamp;
 
     uint32_t hours = total_timestamp / 360000U;
     uint32_t minutes = (total_timestamp % 360000U) / 6000U;
     uint32_t seconds = (total_timestamp % 6000U) / 100U;
     sprintf(bottom, "%02lu%02lu%02lu", hours, minutes, seconds);
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, bottom, bottom);
-
-    sprintf(top_right, "%02u", movement_get_local_date_time().unit.day);
+    /* Convert stored day_index (days since epoch) to local date and show day-of-month */
+    watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->day_totals[state->log_index].day_index * 86400U, movement_get_current_timezone_offset());
+    sprintf(top_right, "%02u", dt.unit.day);
     watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
 }
 
@@ -212,6 +210,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                 case EVENT_LIGHT_BUTTON_UP:
                     state->old_status = state->status;
                     state->status = SW_STATUS_LOG;
+                    state->log_index = 0;
                     return;
                 default:
                     return;
@@ -248,6 +247,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                 case EVENT_LIGHT_BUTTON_UP:
                     state->old_status = state->status;
                     state->status = SW_STATUS_LOG;
+                    state->log_index = 0;
                     return;
                 default:
                     return;
@@ -284,6 +284,11 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->old_display.seconds = UINT_MAX;
                     state->old_display.minutes = UINT_MAX;
                     state->old_display.hours = UINT_MAX;
+                    return;
+                case EVENT_ALARM_BUTTON_UP:
+                    if (state->day_count != 0) {
+                        state->log_index = (state->log_index + 1) % state->day_count;
+                    }
                     return;
                 default:
                     return;

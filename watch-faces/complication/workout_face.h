@@ -27,6 +27,7 @@ typedef struct {
     uint8_t status;              // the status the stopwatch is in (idle, running, stopped, clear-confirm)
     uint8_t old_status;              // the status the stopwatch is in (idle, running, stopped, clear-confirm)
     uint8_t day_count;           // number of days currently tracked in the rolling buffer
+    uint8_t log_index;            // index of the day currently being displayed in the log
     bool clear_yes;              // true when the clear confirmation has been set to yes
     workout_day_total_t day_totals[WORKOUT_HISTORY_DAYS];
     struct {
