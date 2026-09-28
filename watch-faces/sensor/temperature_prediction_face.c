@@ -33,7 +33,7 @@
 #define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT 60
 
 // Constants for showing the predicted temperature
-#define TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX 120 //todo: check how many kb this takes
+#define TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX 120
 #define TEMPERATURE_PREDICTION_AVERAGING_MAX 99
 
 // Constants for coefficient calculation
@@ -112,7 +112,7 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
     return end_temp;
 }
 
-// @brief calculate the exponential moving average of the end temperature and the error of the end temperature
+/// @brief calculate the exponential moving average of the end temperature and the error of the end temperature
 static void temperature_prediction_face_calculate_ema(temperature_prediction_state_t *state) {
     if (state->buffer.length > 1) {
         float variance = 0.0f;
@@ -129,6 +129,7 @@ static void temperature_prediction_face_calculate_ema(temperature_prediction_sta
     }
 }
 
+/// @brief little hack: improve the shown ema value by adding an offset
 static float temperature_prediction_face_improve_ema(temperature_prediction_state_t *state) {
     float m=0;
     for (int i=state->buffer.head_index, j=0; j < state->buffer.length; j++, i = (i - 1 + state->buffer.length) % state->buffer.length) {
@@ -251,7 +252,7 @@ static bool temperature_prediction_face_display_settings(temperature_prediction_
     return true;
 }
 
-/// @brief advance the active setting value up or down
+/// @brief increase the active setting value
 /// @param state face state containing the selected setting
 /// @param forward true to increment, false to decrement
 static void temperature_prediction_face_advance_settings(temperature_prediction_state_t *state) {
