@@ -112,11 +112,57 @@ static float temperature_prediction_face_calculate_end_temperature(temperature_p
     return end_temp;
 }
 
+static float calculate_max_error_rolling_buffer(temperature_prediction_rolling_buffer_t *buffer, float end_temp, float k) {
+    // Falls der Puffer leer ist, gibt es keinen Fehler (0.0)
+    if (buffer == NULL || buffer->length <= 0 || buffer->data == NULL) {
+        return 0.0f;
+    }
+
+    float max_error = 0.0f;
+    int n = buffer->length;
+
+    // Das älteste Element im Ringpuffer finden (entspricht t = 0)
+    // Wenn der Puffer voll ist, liegt es direkt nach dem Head-Index.
+    int oldest_index;
+    if (n < buffer->max) {
+        oldest_index = 0; // Puffer füllt sich noch linear von vorne
+    } else {
+        oldest_index = (buffer->head_index + 1) % buffer->max;
+    }
+
+    // Die Anfangstemperatur (initial_temp) entspricht dem ältesten Wert bei t = 0
+    float initial_temp = buffer->data[oldest_index];
+
+    // Wir gehen chronologisch vom ältesten (t=0) zum neuesten Datenpunkt durch
+    for (int i = 0; i < n; i++) {
+        // Korrekten Index im Ringpuffer berechnen
+        int current_index = (oldest_index + i) % buffer->max;
+        float measured_temp = buffer->data[current_index];
+
+        // Da dt = 1, ist die Zeit t einfach der Schleifenzähler i
+        float t = (float)i; 
+        
+        // Vorhergesagte Temperatur berechnen (jetzt mit der dynamischen initial_temp)
+        float predicted_temp = end_temp + (initial_temp - end_temp) * expf(-k * t);
+        
+        // Absoluten Fehler ermitteln
+        float residual = fabsf(measured_temp - predicted_temp);
+        
+        if (residual > max_error) {
+            max_error = residual;
+        }
+    }
+
+    return max_error;
+}
+
+
 /// @brief calculate the exponential moving average of the end temperature and the error of the end temperature
 static void temperature_prediction_face_calculate_ema(temperature_prediction_state_t *state) {
     if (state->buffer.length > 1) {
         float variance = 0.0f;
         float end_temperature = temperature_prediction_face_calculate_end_temperature(&state->buffer, state->coefficient, &variance);
+        state->variance = variance;
         (void)variance;
         float alpha = 2.0f / (state->average_count + 1); // Alpha = 2 / (N + 1), where N is the number of periods
         state->ema = state->ema == -999 ? end_temperature : ((end_temperature * alpha) + (state->ema * (1 - alpha))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))
@@ -126,6 +172,9 @@ static void temperature_prediction_face_calculate_ema(temperature_prediction_sta
         float error = fabs(state->ema - end_temperature);
         float alpha2 = 2.0f / (30 + 1); // Alpha = 2 / (N + 1), where N is the number of periods (TODO: currently fixed at 30)
         state->ema_error = state->ema_error == -999 ? error : ((error * alpha2) + (state->ema_error * (1 - alpha2))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))       
+
+        temperature_prediction_face_add_to_rolling_buffer(&state->calculated_averages, state->ema);
+        state->variance_max = calculate_max_error_rolling_buffer(&state->buffer, end_temperature, state->coefficient);
     }
 }
 
@@ -284,6 +333,20 @@ static void temperature_prediction_face_advance_settings(temperature_prediction_
     }
 }
 
+/// @brief calculate temperature deviation
+static float temperature_correction_face_calculate_error(temperature_prediction_state_t *state) {
+    if (state->calculated_averages.length < 1) {
+        return 0; 
+    }
+    float min = state->calculated_averages.data[0];
+    float max = state->calculated_averages.data[0];
+    for (int i = 1; i < state->calculated_averages.length; i++) {
+        if (state->calculated_averages.data[i] < min) min = state->calculated_averages.data[i]; // Update minimum
+        if (state->calculated_averages.data[i] > max) max = state->calculated_averages.data[i]; // Update maximum
+    }
+    return max - min;
+}    
+
 /// @brief update WATCH_POSITION_TOP_RIGHT and WATCH_POSITION_BOTTOM according to state (running / coefficient calculation)
 static void temperature_prediction_face_update_display(temperature_prediction_state_t *state, float temperature) {
     char buf[8];
@@ -313,7 +376,17 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
         if (state->show_real_temperature) {
             watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
         } else {   
-            float error = state->ema_error == -999 ? 0 : (state->ema_error * 10.0);       
+            float error = 0;
+            if (state->error_mode == 1) { //ema
+                error = state->ema_error == -999 ? 0 : (state->ema_error * 10.0);            
+            } else if (state->error_mode == 2) { //variance
+                error = state->variance == -999 ? 0 : state->variance;   
+            } else if (state->error_mode == 3) { //variance max
+                error = state->variance_max == -999 ? 0 : state->variance_max;   
+            } else if (state->error_mode == 4) { //minmax
+                error = temperature_correction_face_calculate_error(state);          
+            }
+
             if (error > 99) {
                 sprintf(buf, "99");   
             } else {
@@ -336,6 +409,12 @@ static void temperature_prediction_face_update_display_top_left(temperature_pred
     } else {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "EST", "ET");
     }
+
+    if(state->mode != temperature_prediction_coefficient) {
+        char buf[8];
+        sprintf(buf, "%1d", state->error_mode);   
+        watch_display_string(buf, 1);
+    }
 }
 
 /// @brief (re)start temperature logging or coefficient calculation
@@ -346,8 +425,11 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
         state->mode = temperature_prediction_coefficient;
     } else {
         temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
+        temperature_prediction_face_init_rolling_buffer(&state->calculated_averages, 60);
         state->ema = -999;
         state->ema_error = -999;
+        state->variance = -999;
+        state->variance_max = -999;
         state->mode = temperature_prediction_running;
     }
     temperature_prediction_face_update_display_top_left(state);
@@ -363,6 +445,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
 
         temperature_prediction_state_t *state = (temperature_prediction_state_t *)*context_ptr;       
         state->buffer.data = malloc(TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX * sizeof(float));
+        state->calculated_averages.data = malloc(60 * sizeof(float));
         
         state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
@@ -370,6 +453,7 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->cap = 30;
         state->show_real_temperature = true;
         state->apply_hack = false;
+        state->error_mode = 1;
     }
 }
 
@@ -387,6 +471,10 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
         case EVENT_LIGHT_BUTTON_DOWN:
             switch (state->mode) {
                 case temperature_prediction_running:
+                    state->error_mode++;
+                    if (state->error_mode > 4) {
+                        state->error_mode = 1;
+                    }
                 case temperature_prediction_coefficient:              
                 case temperature_prediction_waiting:
                     movement_illuminate_led();
