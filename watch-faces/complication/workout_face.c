@@ -15,6 +15,8 @@
 #include "watch_rtc.h"
 #include "slcd.h"
 
+#define WORKOUT_BUFFER_SIZE_MAX 7
+
 // Loosely implement the watch as a state machine
 typedef enum {
     SW_STATUS_IDLE = 0,
@@ -33,22 +35,38 @@ static void workout_face_beep() {
     watch_buzzer_play_note_with_volume(BUZZER_NOTE_C7, 50, movement_button_volume());
 }
 
+/// @brief reset a rolling buffer
+/// @param usable_length maximum number of entries the buffer can hold
+static void workout_face_init_rolling_buffer(workout_rolling_buffer_t *buffer, int usable_length) {
+    buffer->head_index = -1;
+    buffer->length = 0;
+    buffer->max = usable_length;
+}
+
+/// @brief add a value to a rolling buffer
+static void workout_face_add_to_rolling_buffer(workout_rolling_buffer_t *buffer, uint32_t elapsed, uint32_t timestamp) {
+    buffer->head_index = (buffer->head_index + 1) % buffer->max;
+    buffer->length = buffer->length + 1 < buffer->max ? buffer->length + 1 : buffer->max;
+    buffer->data[buffer->head_index].elapsed = elapsed;
+    buffer->data[buffer->head_index].timestamp = timestamp;
+}
+
 static void workout_face_show_log(workout_state_t *state) {
-    char bottom[8];
+    char bottom[11];
     char top_right[3];
-    if (state->day_count == 0) {
+    if (state->buffer.length == 0) {
         watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "no dat", "no dat");
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "  ", "  ");
         return;
     }
-    uint32_t total_elapsed = state->day_totals[state->log_index].elapsed;
+    uint32_t total_elapsed = state->buffer.data[state->log_index].elapsed;
 
     uint32_t hours = total_elapsed / 360000U;
     uint32_t minutes = (total_elapsed % 360000U) / 6000U;
     uint32_t seconds = (total_elapsed % 6000U) / 100U;
     sprintf(bottom, "%02lu%02lu%02lu", hours, minutes, seconds);
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, bottom, bottom);
-    watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->day_totals[state->log_index].timestamp * 86400U, movement_get_current_timezone_offset());
+    watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->buffer.data[state->log_index].timestamp * 86400U, movement_get_current_timezone_offset());
     sprintf(top_right, "%02u", dt.unit.day);
     watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
 }
@@ -154,40 +172,28 @@ static uint32_t elapsed_time(workout_state_t *state, rtc_counter_t counter) {
 }
 
 static void workout_face_fix_buffer(workout_state_t *state) {
-    if (state->day_count == 0)
+    uint32_t today_timestamp = movement_get_utc_timestamp() / 86400U;
+
+    if (state->buffer.length == 0) { 
+        //first value: simply add
+        workout_face_add_to_rolling_buffer(&state->buffer, 0, today_timestamp);
+    } else { 
+        //fill the gaps between latest value and today
+        uint32_t latest_timestamp = state->buffer.data[state->buffer.head_index].timestamp;
+        for (uint32_t timestamp = latest_timestamp + 1; timestamp <= today_timestamp; timestamp++) {
+            workout_face_add_to_rolling_buffer(&state->buffer, 0, timestamp);
+        }
+    }
 }
 
-static void workout_face_add_elapsed_to_day_buffer(workout_state_t *state, uint32_t ticks) {
+static void workout_face_add_elapsed_to_buffer(workout_state_t *state, uint32_t ticks) {
     if (ticks == 0) {
         return;
     }
 
     uint32_t elapsed = (ticks * 100U) / 128U;
-    uint32_t today_timestamp = movement_get_utc_timestamp() / 86400U;
 
-    for (uint8_t i = 0; i < state->day_count; i++) {
-        if (state->day_totals[i].timestamp == today_timestamp) {
-            state->day_totals[i].elapsed += elapsed;
-            return;
-        }
-    }
-
-    if (state->day_count < WORKOUT_HISTORY_DAYS) {
-        state->day_totals[state->day_count].timestamp = today_timestamp;
-        state->day_totals[state->day_count].elapsed = elapsed;
-        state->day_count++;
-        return;
-    }
-
-    uint8_t oldest_index = 0;
-    for (uint8_t i = 1; i < WORKOUT_HISTORY_DAYS; i++) {
-        if (state->day_totals[i].timestamp < state->day_totals[oldest_index].timestamp) {
-            oldest_index = i;
-        }
-    }
-
-    state->day_totals[oldest_index].timestamp = today_timestamp;
-    state->day_totals[oldest_index].elapsed = elapsed;
+    state->buffer.data[state->buffer.head_index].elapsed += elapsed;
 }
 
 static void state_transition(workout_state_t *state, rtc_counter_t counter, movement_event_type_t event_type) {
@@ -227,7 +233,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     movement_request_tick_frequency(get_refresh_rate(state));
                     return;
                 case EVENT_ALARM_LONG_PRESS:
-                    workout_face_add_elapsed_to_day_buffer(state, elapsed_time(state, counter));
+                    workout_face_add_elapsed_to_buffer(state, elapsed_time(state, counter));
                     state->status = SW_STATUS_IDLE;
                     state->start_counter = 0;
                     state->stop_counter = 0;
@@ -278,8 +284,8 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->old_display.hours = UINT_MAX;
                     return;
                 case EVENT_ALARM_BUTTON_UP:
-                    if (state->day_count != 0) {
-                        state->log_index = (state->log_index + 1) % state->day_count;
+                    if (state->buffer.length != 0) {
+                        state->log_index = (state->log_index + 1) % state->buffer.length;
                     }
                     return;
                 default:
@@ -297,11 +303,12 @@ void workout_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         *context_ptr = malloc(sizeof(workout_state_t));
         memset(*context_ptr, 0, sizeof(workout_state_t));
         workout_state_t *state = (workout_state_t *)*context_ptr;
+        state->buffer.data = malloc(WORKOUT_BUFFER_SIZE_MAX * sizeof(workout_day_total_t));
         state->start_counter = 0;
         state->stop_counter = 0;
-        state->day_count = 0;
         state->status = SW_STATUS_IDLE;
         state->clear_yes = false;
+        workout_face_init_rolling_buffer(&state->buffer, WORKOUT_BUFFER_SIZE_MAX);
     }
 }
 
@@ -312,6 +319,7 @@ void workout_face_activate(void *context) {
     state->old_display.minutes = UINT_MAX;
     state->old_display.hours = UINT_MAX;
     movement_request_tick_frequency(get_refresh_rate(state));
+    workout_face_fix_buffer(state);
 }
 
 bool workout_face_loop(movement_event_t event, void *context) {

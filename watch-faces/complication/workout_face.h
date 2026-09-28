@@ -14,22 +14,27 @@
 
 #include "movement.h"
 
-#define WORKOUT_HISTORY_DAYS 10U
-
 typedef struct {
     uint32_t timestamp;
     uint32_t elapsed; // elapsed time for the day in hundredths of a second
 } workout_day_total_t;
 
 typedef struct {
+    workout_day_total_t *data;// the data points
+    int length;               // current number of valid entries in the buffer
+    int head_index;           // index of the most recent entry (-1 when empty)
+    int max;                  // maximum capacity of the buffer
+} workout_rolling_buffer_t;   //rolling buffer
+
+
+typedef struct {
     rtc_counter_t start_counter; // rtc counter when the stopwatch was started
     rtc_counter_t stop_counter;  // rtc counter when the stopwatch was stopped
     uint8_t status;              // the status the stopwatch is in (idle, running, stopped, clear-confirm)
     uint8_t old_status;              // the status the stopwatch is in (idle, running, stopped, clear-confirm)
-    uint8_t day_count;           // number of days currently tracked in the rolling buffer
     uint8_t log_index;            // index of the day currently being displayed in the log
     bool clear_yes;              // true when the clear confirmation has been set to yes
-    workout_day_total_t day_totals[WORKOUT_HISTORY_DAYS];
+    workout_rolling_buffer_t buffer;
     struct {
         rtc_counter_t seconds;
         rtc_counter_t minutes;
