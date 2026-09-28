@@ -24,15 +24,16 @@ typedef enum {
     SW_STATUS_LOG,
 } stopwatch_status_t;
 
-static inline void _button_beep() {
-    if (movement_button_should_sound()) watch_buzzer_play_note_with_volume(BUZZER_NOTE_C7, 50, movement_button_volume());
-}
 
 // How quickly should the elapsing time be displayed?
 // This is just for looks, timekeeping is always accurate to 128Hz
 static const uint8_t DISPLAY_RUNNING_RATE = 32;
 
-static void workout_face_show_day_log(workout_state_t *state) {
+static void workout_face_beep() {
+    watch_buzzer_play_note_with_volume(BUZZER_NOTE_C7, 50, movement_button_volume());
+}
+
+static void workout_face_show_log(workout_state_t *state) {
     char bottom[8];
     char top_right[3];
     if (state->day_count == 0) {
@@ -40,30 +41,26 @@ static void workout_face_show_day_log(workout_state_t *state) {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "  ", "  ");
         return;
     }
-    uint32_t total_timestamp = state->day_totals[state->log_index].timestamp;
+    uint32_t total_elapsed = state->day_totals[state->log_index].elapsed;
 
-    uint32_t hours = total_timestamp / 360000U;
-    uint32_t minutes = (total_timestamp % 360000U) / 6000U;
-    uint32_t seconds = (total_timestamp % 6000U) / 100U;
+    uint32_t hours = total_elapsed / 360000U;
+    uint32_t minutes = (total_elapsed % 360000U) / 6000U;
+    uint32_t seconds = (total_elapsed % 6000U) / 100U;
     sprintf(bottom, "%02lu%02lu%02lu", hours, minutes, seconds);
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, bottom, bottom);
-    /* Convert stored day_index (days since epoch) to local date and show day-of-month */
-    watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->day_totals[state->log_index].day_index * 86400U, movement_get_current_timezone_offset());
+    watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->day_totals[state->log_index].timestamp * 86400U, movement_get_current_timezone_offset());
     sprintf(top_right, "%02u", dt.unit.day);
     watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
 }
 
-/// @brief Display minutes, seconds and fractions derived from 128 Hz tick counter
-///        on the lcd.
-/// @param ticks
-static void _display_elapsed(workout_state_t *state, uint32_t ticks) {
+static void workout_face_display(workout_state_t *state, uint32_t ticks) {
     if (state->status == SW_STATUS_CLEAR) {
         watch_display_text(WATCH_POSITION_BOTTOM, state->clear_yes ? "CLEAry" : "CLEArn");
         return;
     }
 
     if (state->status == SW_STATUS_LOG) {
-        workout_face_show_day_log(state);
+        workout_face_show_log(state);
         return;
     }
 
@@ -104,7 +101,7 @@ static void _display_elapsed(workout_state_t *state, uint32_t ticks) {
     watch_display_text(WATCH_POSITION_HOURS, buf);
 }
 
-static void _draw_indicators(workout_state_t *state, movement_event_t event, uint32_t elapsed) {
+static void workout_face_draw_colon(workout_state_t *state, movement_event_t event, uint32_t elapsed) {
     uint8_t subsecond;
     bool tock;
 
@@ -120,9 +117,6 @@ static void _draw_indicators(workout_state_t *state, movement_event_t event, uin
             }
 
             return;
-
-        case SW_STATUS_STOPPED:
-        case SW_STATUS_IDLE:
         default:
             watch_set_colon();
             return;
@@ -159,43 +153,41 @@ static uint32_t elapsed_time(workout_state_t *state, rtc_counter_t counter) {
     }
 }
 
+static void workout_face_fix_buffer(workout_state_t *state) {
+    if (state->day_count == 0)
+}
+
 static void workout_face_add_elapsed_to_day_buffer(workout_state_t *state, uint32_t ticks) {
     if (ticks == 0) {
         return;
     }
 
-    uint32_t elapsed_timestamp = (ticks * 100U) / 128U;
-    uint32_t today_day_index = movement_get_utc_timestamp() / 86400U;
-    uint8_t match_index = UINT8_MAX;
+    uint32_t elapsed = (ticks * 100U) / 128U;
+    uint32_t today_timestamp = movement_get_utc_timestamp() / 86400U;
 
     for (uint8_t i = 0; i < state->day_count; i++) {
-        if (state->day_totals[i].day_index == today_day_index) {
-            match_index = i;
-            break;
+        if (state->day_totals[i].timestamp == today_timestamp) {
+            state->day_totals[i].elapsed += elapsed;
+            return;
         }
     }
 
-    if (match_index != UINT8_MAX) {
-        state->day_totals[match_index].timestamp += elapsed_timestamp;
-        return;
-    }
-
     if (state->day_count < WORKOUT_HISTORY_DAYS) {
-        state->day_totals[state->day_count].day_index = today_day_index;
-        state->day_totals[state->day_count].timestamp = elapsed_timestamp;
+        state->day_totals[state->day_count].timestamp = today_timestamp;
+        state->day_totals[state->day_count].elapsed = elapsed;
         state->day_count++;
         return;
     }
 
     uint8_t oldest_index = 0;
     for (uint8_t i = 1; i < WORKOUT_HISTORY_DAYS; i++) {
-        if (state->day_totals[i].day_index < state->day_totals[oldest_index].day_index) {
+        if (state->day_totals[i].timestamp < state->day_totals[oldest_index].timestamp) {
             oldest_index = i;
         }
     }
 
-    state->day_totals[oldest_index].day_index = today_day_index;
-    state->day_totals[oldest_index].timestamp = elapsed_timestamp;
+    state->day_totals[oldest_index].timestamp = today_timestamp;
+    state->day_totals[oldest_index].elapsed = elapsed;
 }
 
 static void state_transition(workout_state_t *state, rtc_counter_t counter, movement_event_type_t event_type) {
@@ -307,6 +299,7 @@ void workout_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         workout_state_t *state = (workout_state_t *)*context_ptr;
         state->start_counter = 0;
         state->stop_counter = 0;
+        state->day_count = 0;
         state->status = SW_STATUS_IDLE;
         state->clear_yes = false;
     }
@@ -332,20 +325,18 @@ bool workout_face_loop(movement_event_t event, void *context) {
     switch (event.event_type) {
         case EVENT_ACTIVATE:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WOR", "WO");
-            _draw_indicators(state, event, elapsed);
-            _display_elapsed(state, elapsed);
+            workout_face_draw_colon(state, event, elapsed);
+            workout_face_display(state, elapsed);
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
-            break; 
+            break; //no light
         case EVENT_ALARM_BUTTON_UP:
         case EVENT_ALARM_LONG_PRESS:
         case EVENT_LIGHT_BUTTON_UP:
         case EVENT_LIGHT_LONG_PRESS:
-            _button_beep();
-            // fall through
         case EVENT_TICK:
-            _draw_indicators(state, event, elapsed);
-            _display_elapsed(state, elapsed);
+            workout_face_draw_colon(state, event, elapsed);
+            workout_face_display(state, elapsed);
             break;
         default:
             movement_default_loop_handler(event);

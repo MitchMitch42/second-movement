@@ -17,8 +17,8 @@
 #define WORKOUT_HISTORY_DAYS 10U
 
 typedef struct {
-    uint32_t day_index;
-    uint32_t timestamp; // elapsed time for the day in hundredths of a second
+    uint32_t timestamp;
+    uint32_t elapsed; // elapsed time for the day in hundredths of a second
 } workout_day_total_t;
 
 typedef struct {
