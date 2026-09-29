@@ -380,11 +380,11 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
             if (state->error_mode == 1) { //ema
                 error = state->ema_error == -999 ? 0 : (state->ema_error * 10.0);            
             } else if (state->error_mode == 2) { //variance
-                error = state->variance == -999 ? 0 : state->variance;   
+                error = state->variance == -999 ? 0 : state->variance * 100.0;   
             } else if (state->error_mode == 3) { //variance max
-                error = state->variance_max == -999 ? 0 : state->variance_max;   
+                error = state->variance_max == -999 ? 0 : state->variance_max * 100.0;   
             } else if (state->error_mode == 4) { //minmax
-                error = temperature_correction_face_calculate_error(state);          
+                error = temperature_correction_face_calculate_error(state) * 10.0;          
             }
 
             if (error > 99) {
@@ -475,6 +475,7 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
                     if (state->error_mode > 4) {
                         state->error_mode = 1;
                     }
+                    temperature_prediction_face_update_display_top_left(state);
                 case temperature_prediction_coefficient:              
                 case temperature_prediction_waiting:
                     movement_illuminate_led();
