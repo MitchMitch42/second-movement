@@ -62,6 +62,6 @@ SRCS += \
   ./watch-faces/clock/world_clock2_face.c \
   ./watch-faces/sensor/blink_receiver_face.c \
   ./watch-faces/complication/tamagotchi_face.c \
-  ./watch-faces/sensor/temperature_correction_face.c \
+  ./watch-faces/sensor/temperature_prediction_face.c \
   ./watch-faces/demo/easteregg_face.c \
 # New watch faces go above this line.
