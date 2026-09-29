@@ -32,11 +32,6 @@ typedef enum {
 // This is just for looks, timekeeping is always accurate to 128Hz
 static const uint8_t DISPLAY_RUNNING_RATE = 32;
 
-static const int8_t workout_beep_single[] = {
-    BUZZER_NOTE_C7, 2,
-    0
-};
-
 /// @brief reset a rolling buffer
 /// @param usable_length maximum number of entries the buffer can hold
 static void workout_face_init_rolling_buffer(workout_rolling_buffer_t *buffer, int usable_length) {
@@ -61,16 +56,31 @@ static void workout_face_show_log(workout_state_t *state) {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "  ", "  ");
         return;
     }
-    uint32_t total_elapsed = state->buffer.data[state->log_index].elapsed;
+
+    uint32_t total_elapsed;
+
+    if (state->log_index == -1) {
+        total_elapsed = 0;
+        for (int i = 0; i < state->buffer.length; i++) {
+            total_elapsed += state->buffer.data[i].elapsed;
+        }
+        total_elapsed /= state->buffer.length;
+    } else {
+        total_elapsed = state->buffer.data[state->log_index].elapsed;
+    }
 
     uint32_t hours = total_elapsed / 360000U;
     uint32_t minutes = (total_elapsed % 360000U) / 6000U;
     uint32_t seconds = (total_elapsed % 6000U) / 100U;
     sprintf(bottom, "%02lu%02lu%02lu", hours, minutes, seconds);
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, bottom, bottom);
-    watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->buffer.data[state->log_index].timestamp * 86400U, movement_get_current_timezone_offset());
-    sprintf(top_right, "%02u", dt.unit.day);
-    watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
+    if (state->log_index == -1) {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "AV", "AV");
+    } else {
+        watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->buffer.data[state->log_index].timestamp * 86400U, movement_get_current_timezone_offset());
+        sprintf(top_right, "%02u", dt.unit.day);
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
+    }
 }
 
 static void workout_face_display(workout_state_t *state, uint32_t ticks) {
@@ -216,7 +226,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                 case EVENT_LIGHT_BUTTON_UP:
                     state->old_status = state->status;
                     state->status = SW_STATUS_LOG;
-                    state->log_index = state->buffer.head_index;
+                    state->log_index = -1;
                     return;
                 default:
                     return;
@@ -261,7 +271,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                 case EVENT_LIGHT_BUTTON_UP:
                     state->old_status = state->status;
                     state->status = SW_STATUS_LOG;
-                    state->log_index = state->buffer.head_index;
+                    state->log_index = -1;
                     return;
                 default:
                     return;
@@ -315,12 +325,14 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->old_display.hours = UINT_MAX;
                     return;
                 case EVENT_LIGHT_LONG_PRESS:
-                    state->status = SW_STATUS_CLEAR_LOG;
-                    state->clear_yes = false;
+                    if (state->log_index != -1) {
+                        state->status = SW_STATUS_CLEAR_LOG;
+                        state->clear_yes = false;
+                    }
                     return;
                 case EVENT_ALARM_BUTTON_UP:
                     if (state->buffer.length != 0) {
-                        state->log_index = (state->log_index - 1) % state->buffer.length;
+                        state->log_index = state->log_index == -1 ? state->buffer.head_index : ((state->log_index - 1) % state->buffer.length);
                     }
                     return;
                 default:
@@ -368,7 +380,7 @@ bool workout_face_loop(movement_event_t event, void *context) {
 
     if (state->sound_enabled && state->sound_second == watch_rtc_get_date_time().unit.second) {
         state->sound_second = state->sound_second + 30 < 60 ? state->sound_second + 30 : state->sound_second - 30;
-        movement_play_sequence(workout_beep_single, BUZZER_PRIORITY_SIGNAL);
+        movement_play_note(BUZZER_NOTE_C8, 50);
     }
 
     switch (event.event_type) {
