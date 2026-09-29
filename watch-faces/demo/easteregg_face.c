@@ -33,6 +33,9 @@ uint8_t blue= 0;
 uint8_t tick=0;
 bool led_enabled= false;
 bool _clear;
+bool led_on;
+
+uint8_t _ee_frequency;
 
 uint8_t _com;
 uint8_t _seg;
@@ -96,6 +99,19 @@ void easteregg_face_activate(void *context) {
             watch_set_pixel(com, seg);
         }
     }
+
+    led_enabled= false;
+    led_on= false;
+
+    red= 0;
+    green= 0;
+    blue= 0;
+    tick=0;
+    _clear = false;
+    _com = 0;
+    _seg = 0;
+
+    _ee_frequency = 32;
 }
 
 bool easteregg_face_loop(movement_event_t event, void *context) {
@@ -104,7 +120,7 @@ bool easteregg_face_loop(movement_event_t event, void *context) {
     switch (event.event_type) {
         case EVENT_TICK:
             if(led_enabled) {
-
+                led_on = true;
                 if(_clear)
                     watch_clear_pixel(_com, _seg);
                 else
@@ -121,10 +137,6 @@ bool easteregg_face_loop(movement_event_t event, void *context) {
                     }
                 }
 
-                movement_force_led_on(
-                    red | red << 4,
-                    green | green << 4,
-                    blue | blue << 4);         
                 if(tick < 15 * 1) red++;
                 else if(tick < 15 * 2) green++;
                 else if(tick < 15 * 3) red--;
@@ -135,21 +147,39 @@ bool easteregg_face_loop(movement_event_t event, void *context) {
                 else if(tick < 15 * 8) blue--;
                 else tick = -1;
                 tick++;
+
+                movement_force_led_on(
+                    red | red << 4,
+                    green | green << 4,
+                    blue | blue << 4);    
             }
 
             break;
         case EVENT_LIGHT_BUTTON_UP:
-            led_enabled= !led_enabled; 
-            if(led_enabled)
-                movement_request_tick_frequency(16);
+            led_enabled= !led_enabled;
+            if (led_enabled) {
+                movement_request_tick_frequency(_ee_frequency);
                 watch_clear_display();
+                red= 0;
+                green= 0;
+                blue= 0;
+                tick=0;
+                _clear = false;
+                _com = 0;
+                _seg = 0;
+
+                _ee_frequency /= 2;
+                if (_ee_frequency == 4) {
+                    _ee_frequency = 32;
+                }
+            }
+
             break;
 
         case EVENT_LIGHT_LONG_PRESS:
-            led_enabled= true; 
-            if(led_enabled)
-                movement_request_tick_frequency(32);
-                watch_clear_display();
+            movement_state.settings.bit.led_red_color = red;
+            movement_state.settings.bit.led_green_color = green;
+            movement_state.settings.bit.led_blue_color = blue;
             break;
 
         case EVENT_ALARM_BUTTON_DOWN:
@@ -165,7 +195,9 @@ bool easteregg_face_loop(movement_event_t event, void *context) {
 
 void easteregg_face_resign(void *context) {
     (void) context;
-
+    if (led_on) {
+        movement_force_led_off();
+    }
     // handle any cleanup before your watch face goes off-screen.
 }
 
