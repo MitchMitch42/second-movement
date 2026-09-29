@@ -41,7 +41,7 @@ const watch_face_t watch_faces[] = {
     voltage_face,
     endless_runner_face,
     simon_face,
-    ping_face
+    ping_face,
 
     world_clock_face,
     settings_face,
