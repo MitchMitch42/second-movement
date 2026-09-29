@@ -177,7 +177,8 @@ bool easteregg_face_loop(movement_event_t event, void *context) {
             }
 
             break;
-
+        case EVENT_LIGHT_BUTTON_DOWN:
+            break; //no light
         case EVENT_LIGHT_LONG_PRESS:
             ee_color = movement_backlight_color();
             ee_color.red = red;
