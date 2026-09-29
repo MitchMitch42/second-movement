@@ -384,7 +384,7 @@ bool workout_face_loop(movement_event_t event, void *context) {
         case EVENT_LIGHT_BUTTON_DOWN:
         case EVENT_LIGHT_LONG_PRESS:
         case EVENT_TICK:
-            workout_face_draw_colon(state, event, elapsed);
+            workout_face_draw_colon(state, elapsed);
             workout_face_display(state, elapsed);
             break;
         default:
