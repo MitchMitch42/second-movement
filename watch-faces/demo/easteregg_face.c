@@ -40,6 +40,8 @@ uint8_t _ee_frequency;
 uint8_t _com;
 uint8_t _seg;
 
+movement_color_t ee_color;
+
 int8_t hp_signal_tune[] = {
     BUZZER_NOTE_B5, 12,
     BUZZER_NOTE_REST, 1,
@@ -177,9 +179,11 @@ bool easteregg_face_loop(movement_event_t event, void *context) {
             break;
 
         case EVENT_LIGHT_LONG_PRESS:
-            movement_state.settings.bit.led_red_color = red;
-            movement_state.settings.bit.led_green_color = green;
-            movement_state.settings.bit.led_blue_color = blue;
+            ee_color = movement_backlight_color();
+            ee_color.red = red;
+            ee_color.green = green;
+            ee_color.blue = blue;
+            movement_set_backlight_color(ee_color);
             break;
 
         case EVENT_ALARM_BUTTON_DOWN:
