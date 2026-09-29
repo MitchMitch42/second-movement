@@ -229,7 +229,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     if (state->sound_enabled) {
                         state->sound_second = watch_rtc_get_date_time().unit.second;
                     }
-                    break;
+                    return;
                 case EVENT_ALARM_BUTTON_UP:
                     state->sound_enabled = false;
                     state->status = SW_STATUS_STOPPED;
