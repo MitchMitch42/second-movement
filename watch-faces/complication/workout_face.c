@@ -22,7 +22,8 @@ typedef enum {
     SW_STATUS_IDLE = 0,
     SW_STATUS_RUNNING,
     SW_STATUS_STOPPED,
-    SW_STATUS_CLEAR,
+    SW_STATUS_CLEAR_CURRENT,
+    SW_STATUS_CLEAR_LOG,
     SW_STATUS_LOG,
 } stopwatch_status_t;
 
@@ -72,8 +73,8 @@ static void workout_face_show_log(workout_state_t *state) {
 }
 
 static void workout_face_display(workout_state_t *state, uint32_t ticks) {
-    if (state->status == SW_STATUS_CLEAR) {
-        watch_display_text(WATCH_POSITION_BOTTOM, state->clear_yes ? "CLEAry" : "CLEArn");
+    if (state->status == SW_STATUS_CLEAR_CURRENT || state->status == SW_STATUS_CLEAR_LOG) {
+        watch_display_text(WATCH_POSITION_BOTTOM, state->clear_yes ? "CLEA y" : "CLEA n");
         return;
     }
 
@@ -119,7 +120,7 @@ static void workout_face_display(workout_state_t *state, uint32_t ticks) {
     watch_display_text(WATCH_POSITION_HOURS, buf);
 }
 
-static void workout_face_draw_colon(workout_state_t *state, movement_event_t event, uint32_t elapsed) {
+static void workout_face_draw_colon(workout_state_t *state, uint32_t elapsed) {
     uint8_t subsecond;
     bool tock;
 
@@ -147,7 +148,8 @@ static uint8_t get_refresh_rate(workout_state_t *state) {
             return DISPLAY_RUNNING_RATE;
         case SW_STATUS_STOPPED:
         case SW_STATUS_IDLE:
-        case SW_STATUS_CLEAR:
+        case SW_STATUS_CLEAR_CURRENT:
+        case SW_STATUS_CLEAR_LOG:
         case SW_STATUS_LOG:
         default:
             return 1;
@@ -162,7 +164,7 @@ static uint32_t elapsed_time(workout_state_t *state, rtc_counter_t counter) {
         case SW_STATUS_RUNNING:
             return counter - state->start_counter;
 
-        case SW_STATUS_CLEAR:
+        case SW_STATUS_CLEAR_CURRENT:
         case SW_STATUS_STOPPED:
             return state->stop_counter - state->start_counter;
 
@@ -191,6 +193,8 @@ static void workout_face_add_elapsed_to_buffer(workout_state_t *state, uint32_t 
         return;
     }
 
+    workout_face_fix_buffer(state);
+
     uint32_t elapsed = (ticks * 100U) / 128U;
 
     state->buffer.data[state->buffer.head_index].elapsed += elapsed;
@@ -200,15 +204,15 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
     switch (state->status) {
         case SW_STATUS_IDLE:
             switch (event_type) {
-                case EVENT_ALARM_BUTTON_UP:
+                case EVENT_ALARM_BUTTON_DOWN:
                     state->status = SW_STATUS_RUNNING;
                     state->start_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
                     return;   
-                case EVENT_LIGHT_BUTTON_UP:
+                case EVENT_LIGHT_BUTTON_DOWN:
                     state->old_status = state->status;
                     state->status = SW_STATUS_LOG;
-                    state->log_index = 0;
+                    state->log_index = state->buffer.head_index;
                     return;
                 default:
                     return;
@@ -216,11 +220,15 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
 
         case SW_STATUS_RUNNING:
             switch (event_type) {
-                case EVENT_ALARM_BUTTON_UP:
+                case EVENT_LIGHT_BUTTON_DOWN:
+                    movement_illuminate_led();
+                    break;
+                case EVENT_ALARM_BUTTON_DOWN:
                     state->status = SW_STATUS_STOPPED;
                     state->stop_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
                     return;
+                
                 default:
                     return;
             }
@@ -239,25 +247,24 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->stop_counter = 0;
                     return;
                 case EVENT_LIGHT_LONG_PRESS:
-                    state->status = SW_STATUS_CLEAR;
+                    state->status = SW_STATUS_CLEAR_CURRENT;
                     state->clear_yes = false;
                     return;
                 case EVENT_LIGHT_BUTTON_UP:
                     state->old_status = state->status;
                     state->status = SW_STATUS_LOG;
-                    state->log_index = 0;
+                    state->log_index = state->buffer.head_index;
                     return;
                 default:
                     return;
             }
 
-        case SW_STATUS_CLEAR:
+        case SW_STATUS_CLEAR_CURRENT:
             switch (event_type) {
-                case EVENT_ALARM_BUTTON_UP:
+                case EVENT_ALARM_BUTTON_DOWN:
                     state->clear_yes = !state->clear_yes;
                     return;
-                case EVENT_LIGHT_LONG_PRESS:
-                case EVENT_LIGHT_BUTTON_UP:
+                case EVENT_LIGHT_BUTTON_DOWN:
                     //force full redraw
                     state->old_display.seconds = UINT_MAX;
                     state->old_display.minutes = UINT_MAX;
@@ -275,6 +282,22 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     return;
             }
 
+        case SW_STATUS_CLEAR_LOG:
+            switch (event_type) {
+                case EVENT_ALARM_BUTTON_DOWN:
+                    state->clear_yes = !state->clear_yes;
+                    return;
+                case EVENT_LIGHT_BUTTON_DOWN:
+                    if (state->clear_yes) {
+                        state->buffer.data[state->log_index].elapsed = 0;
+                    }
+                    state->clear_yes = false;
+                    state->status = SW_STATUS_LOG;
+                    return;
+                default:
+                    return;
+            }
+
         case SW_STATUS_LOG:
             switch (event_type) {
                 case EVENT_LIGHT_BUTTON_UP:
@@ -283,9 +306,13 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->old_display.minutes = UINT_MAX;
                     state->old_display.hours = UINT_MAX;
                     return;
-                case EVENT_ALARM_BUTTON_UP:
+                case EVENT_LIGHT_LONG_PRESS:
+                    state->status = SW_STATUS_CLEAR_LOG;
+                    state->clear_yes = false;
+                    return;
+                case EVENT_ALARM_BUTTON_DOWN:
                     if (state->buffer.length != 0) {
-                        state->log_index = (state->log_index + 1) % state->buffer.length;
+                        state->log_index = (state->log_index - 1) % state->buffer.length;
                     }
                     return;
                 default:
@@ -332,15 +359,15 @@ bool workout_face_loop(movement_event_t event, void *context) {
 
     switch (event.event_type) {
         case EVENT_ACTIVATE:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WOR", "WO");
-            workout_face_draw_colon(state, event, elapsed);
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WOK", "WO");
+            workout_face_draw_colon(state, elapsed);
             workout_face_display(state, elapsed);
             break;
-        case EVENT_LIGHT_BUTTON_DOWN:
-            break; //no light
         case EVENT_ALARM_BUTTON_UP:
+        case EVENT_ALARM_BUTTON_DOWN:
         case EVENT_ALARM_LONG_PRESS:
         case EVENT_LIGHT_BUTTON_UP:
+        case EVENT_LIGHT_BUTTON_DOWN:
         case EVENT_LIGHT_LONG_PRESS:
         case EVENT_TICK:
             workout_face_draw_colon(state, event, elapsed);
