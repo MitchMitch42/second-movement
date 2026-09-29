@@ -32,9 +32,10 @@ typedef enum {
 // This is just for looks, timekeeping is always accurate to 128Hz
 static const uint8_t DISPLAY_RUNNING_RATE = 32;
 
-static void workout_face_beep() {
-    watch_buzzer_play_note_with_volume(BUZZER_NOTE_C7, 50, movement_button_volume());
-}
+static const int8_t workout_beep_single[] = {
+    BUZZER_NOTE_C7, 2,
+    0
+};
 
 /// @brief reset a rolling buffer
 /// @param usable_length maximum number of entries the buffer can hold
@@ -73,6 +74,9 @@ static void workout_face_show_log(workout_state_t *state) {
 }
 
 static void workout_face_display(workout_state_t *state, uint32_t ticks) {
+    if (state->sound_enabled) watch_set_indicator(WATCH_INDICATOR_BELL);
+    else watch_clear_indicator(WATCH_INDICATOR_BELL);
+
     if (state->status == SW_STATUS_CLEAR_CURRENT || state->status == SW_STATUS_CLEAR_LOG) {
         watch_display_text(WATCH_POSITION_BOTTOM, state->clear_yes ? "CLEA y" : "CLEA n");
         return;
@@ -221,9 +225,13 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
         case SW_STATUS_RUNNING:
             switch (event_type) {
                 case EVENT_LIGHT_BUTTON_DOWN:
-                    movement_illuminate_led();
+                    state->sound_enabled = !state->sound_enabled;
+                    if (state->sound_enabled) {
+                        state->sound_second = watch_rtc_get_date_time().unit.second;
+                    }
                     break;
                 case EVENT_ALARM_BUTTON_DOWN:
+                    state->sound_enabled = false;
                     state->status = SW_STATUS_STOPPED;
                     state->stop_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
@@ -345,6 +353,7 @@ void workout_face_activate(void *context) {
     state->old_display.seconds = UINT_MAX;
     state->old_display.minutes = UINT_MAX;
     state->old_display.hours = UINT_MAX;
+    state->sound_enabled = false;
     movement_request_tick_frequency(get_refresh_rate(state));
     workout_face_fix_buffer(state);
 }
@@ -356,6 +365,11 @@ bool workout_face_loop(movement_event_t event, void *context) {
 
     state_transition(state, counter, event.event_type);
     rtc_counter_t elapsed = elapsed_time(state, counter);
+
+    if (state->sound_enabled && state->sound_second == watch_rtc_get_date_time().unit.second) {
+        state->sound_second = state->sound_second + 30 < 60 ? state->sound_second + 30 : state->sound_second - 30;
+        movement_play_sequence(workout_beep_single, BUZZER_PRIORITY_SIGNAL);
+    }
 
     switch (event.event_type) {
         case EVENT_ACTIVATE:
