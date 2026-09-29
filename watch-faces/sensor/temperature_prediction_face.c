@@ -1,0 +1,634 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2025 Mitch42
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include "temperature_prediction_face.h"
+
+// Default initial values
+#define TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT 0.002F
+#define TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE 120
+#define TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT 60
+
+// Constants for showing the predicted temperature
+#define TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX 120
+#define TEMPERATURE_PREDICTION_AVERAGING_MAX 99
+
+// Constants for coefficient calculation
+#define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES 5 //defines how long the temperature shall be constant to determine that equilibrium has been reached.
+#define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD 0.1 //defines the maximum allowed temperature deviation to determine that equilibrium has been reached.
+#define TEMPERATURE_PREDICTION_CALCULATION_IGNORE_START_MINUTES 5 //if you start coefficient calculation, the watch is waiting for n minutes to ensure that the temperature flow is stable
+#define TEMPERATURE_PREDICTION_CALCULATION_END_TEMP_DELTA 2.0 //ignore everything below (end_temp - 2.0), as the temperature is too close to the end temperature, making the temperature flow become unstable
+
+// int debug_index = 0;
+// float debug_data[] = { 29.2, 29.2, 29.2, 29.2, 29.2, 29.2, 29.1, 29.1, 29.1, 29.1, 29.1, 29.1, 29.1, 29.1, 29.1, 29.1, 29.1, 29.0, 29.0, 29.0, 29.0, 29.0, 29.0, 29.0, 29.0, 29.0, 29.0, 28.9, 28.9, 28.9, 28.9, 28.9, 28.9, 28.9, 28.9, 28.9, 28.9, 28.8, 28.8, 28.8, 28.8, 28.8, 28.8, 28.8, 28.8, 28.8, 28.8, 28.7, 28.7, 28.7, 28.7, 28.7, 28.7, 28.7, 28.7, 28.7, 28.7, 28.6, 28.6, 28.6, 28.6, 28.6, 28.6, 28.6, 28.6, 28.6, 28.6, 28.5, 28.5, 28.5, 28.5, 28.5, 28.5, 28.5, 28.5, 28.5, 28.5, 28.4, 28.4, 28.4, 28.4, 28.4, 28.4, 28.3, 28.3, 28.3, 28.3, 28.3, 28.3, 28.3, 28.3, 28.2, 28.2, 28.2, 28.2, 28.2, 28.2, 28.2, 28.2, 28.2, 28.2, 28.1, 28.1, 28.1, 28.1, 28.1, 28.1, 28.1, 28.1, 28.1, 28.1, 28.1, 28.0, 28.0, 28.0, 28.0, 28.0, 28.0, 28.0, 28.0, 28.0, 28.0, 28.0, 28.0, 27.9, 27.9, 27.9, 27.9, 27.9, 27.9, 27.9, 27.9, 27.9, 27.9, 27.9, 27.8, 27.8, 27.8, 27.8, 27.8, 27.8, 27.8, 27.8, 27.8, 27.8, 27.8, 27.8, 27.7, 27.7, 27.7, 27.7, 27.7, 27.7, 27.7, 27.7, 27.7, 27.7, 27.7, 27.6, 27.6, 27.6, 27.6, 27.6, 27.6, 27.6, 27.6, 27.6, 27.6, 27.6, 27.5, 27.5, 27.5, 27.5, 27.5, 27.5, 27.5, 27.5, 27.5, 27.5, 27.5, 27.4, 27.4, 27.4, 27.4, 27.4, 27.4, 27.4, 27.4, 27.4, 27.4, 27.4, 27.4, 27.4, 27.3, 27.3, 27.3, 27.3, 27.3, 27.3, 27.3, 27.2, 27.2, 27.2, 27.2, 27.2, 27.2, 27.2, 27.2, 27.2, 27.2, 27.2, 27.2, 27.2, 27.1, 27.1, 27.1, 27.1, 27.1, 27.1, 27.1, 27.1, 27.1, 27.1, 27.1, 27.1, 27.1, 27.1, 27.0, 27.0, 27.0, 27.0, 27.0, 27.0, 27.0, 27.0, 27.0, 27.0, 27.0, 27.0, 27.0, 27.0, 26.9, 26.9, 26.9, 26.9, 26.9, 26.9, 26.9, 26.9, 26.9, 26.9, 26.9, 26.9, 26.9, 26.8, 26.8, 26.8, 26.8, 26.8, 26.8, 26.8, 26.8, 26.8, 26.8, 26.8, 26.8, 26.8, 26.8, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.7, 26.6, 26.6, 26.6, 26.6, 26.6, 26.6, 26.6, 26.6, 26.6, 26.6, 26.6, 26.6, 26.6, 26.6, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.5, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.4, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.3, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.2, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.1, 26.0, 26.0, 26.0, 26.0, 26.0, 26.0, 26.0, 26.0, 26.0, 26.0, 26.0, 26.0, 26.0, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.9, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.8, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.7, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.6, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.5, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.4, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.2, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.1, 25.0, 25.1, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 25.0, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.9, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.8, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.7, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.6, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.5, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.4, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.3, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.2, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.1, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 24.0, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.9, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.8, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.7, 23.6, 23.7, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.6, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.5, 23.4, 23.5, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.4, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.3, 23.2, 23.3, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.2, 23.1, 23.2, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.1, 23.0, 23.1, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 23.0, 22.9, 23.0, 23.0, 23.0, 22.9, 22.9, 22.9, 22.9, 23.0, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.9, 22.8, 22.9, 22.9, 22.9, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.7, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.8, 22.7, 22.7, 22.7, 22.8, 22.8, 22.7, 22.7, 22.7, 22.8, 22.7 };
+
+// float movement_get_temperature(void) {
+//     float ret= debug_data[debug_index];
+//     debug_index = (debug_index + 1) % 2168;
+//     return ret;
+// }
+
+/// @brief reset a rolling buffer
+/// @param usable_length maximum number of entries the buffer can hold
+static void temperature_prediction_face_init_rolling_buffer(temperature_prediction_rolling_buffer_t *buffer, int usable_length) {
+    buffer->head_index = -1;
+    buffer->length = 0;
+    buffer->max = usable_length;
+}
+
+/// @brief add a value to a rolling buffer
+static void temperature_prediction_face_add_to_rolling_buffer(temperature_prediction_rolling_buffer_t *buffer, float value) {
+    buffer->head_index = (buffer->head_index + 1) % buffer->max;
+    buffer->length = buffer->length + 1 < buffer->max ? buffer->length + 1 : buffer->max;
+    buffer->data[buffer->head_index] = value;
+}
+
+/// @brief calculate end temperature with a closed-form least squares solution of Newton's law of cooling, performing a linear regression on the linearized exponential temperature curve
+/// and the residual variance of the linearized exponential fit
+static float temperature_prediction_face_calculate_end_temperature(temperature_prediction_rolling_buffer_t *buffer, float coefficient, float *variance_out) {
+    const float alpha = expf(-coefficient); // dt = 1s
+    float numerator = 0.0f;
+    float denominator = 0.0f;
+    float e = 1.0f;
+    uint16_t index = (buffer->head_index + 1) % buffer->length;
+    const float t0 = buffer->data[index];
+    
+    for (uint16_t i = 0; i < buffer->length; i++) {
+        const float w = 1.0f - e;
+        numerator   += w * (buffer->data[index] - e * t0);
+        denominator += w * w;
+        e *= alpha;
+        index = (index + 1) % buffer->length;
+    }
+
+    const float end_temp = denominator <= 0.0f ? t0 : (numerator / denominator);
+
+    if (variance_out != NULL) {
+        float ss_res = 0.0f;
+        float count = 0.0f;
+        uint16_t linear_index = (buffer->head_index + 1) % buffer->length;
+        const float t_start = buffer->data[linear_index];
+
+        for (uint16_t i = 0; i < buffer->length; i++) {
+            const float value = buffer->data[linear_index];
+            const float delta = value - end_temp;
+            if (delta > 0.0f) {
+                const float x = (float)i;
+                const float y = logf(delta);
+                const float y_expected = logf(t_start - end_temp) - coefficient * x;
+                const float residual = y - y_expected;
+                ss_res += residual * residual;
+                count += 1.0f;
+            }
+            linear_index = (linear_index + 1) % buffer->length;
+        }
+
+        *variance_out = count > 0.0f ? (ss_res / count) : 0.0f;
+    }
+
+    return end_temp;
+}
+
+static float calculate_max_error_rolling_buffer(temperature_prediction_rolling_buffer_t *buffer, float end_temp, float k) {
+    // Falls der Puffer leer ist, gibt es keinen Fehler (0.0)
+    if (buffer == NULL || buffer->length <= 0 || buffer->data == NULL) {
+        return 0.0f;
+    }
+
+    float max_error = 0.0f;
+    int n = buffer->length;
+
+    // Das älteste Element im Ringpuffer finden (entspricht t = 0)
+    // Wenn der Puffer voll ist, liegt es direkt nach dem Head-Index.
+    int oldest_index;
+    if (n < buffer->max) {
+        oldest_index = 0; // Puffer füllt sich noch linear von vorne
+    } else {
+        oldest_index = (buffer->head_index + 1) % buffer->max;
+    }
+
+    // Die Anfangstemperatur (initial_temp) entspricht dem ältesten Wert bei t = 0
+    float initial_temp = buffer->data[oldest_index];
+
+    // Wir gehen chronologisch vom ältesten (t=0) zum neuesten Datenpunkt durch
+    for (int i = 0; i < n; i++) {
+        // Korrekten Index im Ringpuffer berechnen
+        int current_index = (oldest_index + i) % buffer->max;
+        float measured_temp = buffer->data[current_index];
+
+        // Da dt = 1, ist die Zeit t einfach der Schleifenzähler i
+        float t = (float)i; 
+        
+        // Vorhergesagte Temperatur berechnen (jetzt mit der dynamischen initial_temp)
+        float predicted_temp = end_temp + (initial_temp - end_temp) * expf(-k * t);
+        
+        // Absoluten Fehler ermitteln
+        float residual = fabsf(measured_temp - predicted_temp);
+        
+        if (residual > max_error) {
+            max_error = residual;
+        }
+    }
+
+    return max_error;
+}
+
+
+/// @brief calculate the exponential moving average of the end temperature and the error of the end temperature
+static void temperature_prediction_face_calculate_ema(temperature_prediction_state_t *state) {
+    if (state->buffer.length > 1) {
+        float variance = 0.0f;
+        float end_temperature = temperature_prediction_face_calculate_end_temperature(&state->buffer, state->coefficient, &variance);
+        state->variance = variance;
+        (void)variance;
+        float alpha = 2.0f / (state->average_count + 1); // Alpha = 2 / (N + 1), where N is the number of periods
+        state->ema = state->ema == -999 ? end_temperature : ((end_temperature * alpha) + (state->ema * (1 - alpha))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))
+        if (fabs(state->ema - end_temperature) > ((float)state->cap) / 2.0) { //if the difference between the end temperature and the EMA is too big, reset the EMA to the end temperature
+            state->ema = end_temperature;
+        }
+        float error = fabs(state->ema - end_temperature);
+        float alpha2 = 2.0f / (30 + 1); // Alpha = 2 / (N + 1), where N is the number of periods (TODO: currently fixed at 30)
+        state->ema_error = state->ema_error == -999 ? error : ((error * alpha2) + (state->ema_error * (1 - alpha2))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))       
+
+        temperature_prediction_face_add_to_rolling_buffer(&state->calculated_averages, state->ema);
+        state->variance_max = calculate_max_error_rolling_buffer(&state->buffer, end_temperature, state->coefficient);
+    }
+}
+
+/// @brief little hack: improve the shown ema value by adding an offset
+static float temperature_prediction_face_improve_ema(temperature_prediction_state_t *state) {
+    float m=0;
+    for (int i=state->buffer.head_index, j=0; j < state->buffer.length; j++, i = (i - 1 + state->buffer.length) % state->buffer.length) {
+        if (state->buffer.data[i] != state->buffer.data[state->buffer.head_index]) {
+            m = state->buffer.data[state->buffer.head_index] - state->buffer.data[i];
+            break;
+        }
+    }
+    return m < 0 ? state->ema - state->ema_error : m > 0 ? state->ema + state->ema_error : state->ema;
+}
+
+/// @brief calculate heat transfer coefficient of Newtons law of cooling, using all points and performing a linear regression of the transformed logarithmic curve
+static float temperature_prediction_face_calculate_coefficient_with_linear_regression(temperature_prediction_rolling_buffer_t *buffer, int end_temp_cnt, int ignore_start_cnt, float ignore_delta_temp) {
+    //determine end temperature
+    float temp_end = 0;
+    for (int i = buffer->length - end_temp_cnt; i < buffer->length; i++) {
+        temp_end += buffer->data[i];
+    }
+    temp_end /= end_temp_cnt;
+
+    //calculate values for linear regression, formula is: -m=(nΣxy-ΣxΣy)/(mΣx²-(Σx)²)
+    float sum_x = 0;
+    float sum_y = 0;
+    float sum_xx = 0;
+    float sum_xy = 0;
+    int n = 0; 
+    for (int i = ignore_start_cnt; i < buffer->length; i++) {
+        if (fabs(buffer->data[i] - temp_end) <= ignore_delta_temp) {
+            break; //temperature is near end temperature, becoming unstable
+        } else {
+            float x = (i - ignore_start_cnt) * 60.0; //x = delta time in seconds
+            float y = logf(buffer->data[i] - temp_end); //y = ln(T - Tend)
+            sum_x += x;
+            sum_y += y;
+            sum_xx += x * x;
+            sum_xy += x * y;
+            n++;
+        }
+    }
+
+    if (n * sum_xx - sum_x * sum_x == 0) return 0;
+    else return (float)(-((n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)));
+}
+
+/// @brief check if max-min of the last n values of buffer is <= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD, with n = TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES
+static bool temperature_prediction_face_equilibrium_reached(temperature_prediction_rolling_buffer_t *buffer) {
+    //we know that buffer->length < buffer->max, and also that the buffer has at least TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES values
+    float min = buffer->data[buffer->length - TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES];
+    float max = buffer->data[buffer->length - TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES];
+    for (int i = buffer->length - TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES + 1; i < buffer->length; i++) {
+        if (buffer->data[i] < min) min = buffer->data[i]; // Update minimum
+        if (buffer->data[i] > max) max = buffer->data[i]; // Update maximum
+    }
+    return max - min <= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_TRESHOLD;
+}
+
+/// @brief show the coefficient at the bottom line
+static void temperature_prediction_face_display_coefficient(float coeff_f) {
+    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    char buf[8];
+    int coeff = (int)(coeff_f * 100000 + 0.5); // 0.0013240584 -> 000132
+    sprintf(buf, "%06d", coeff); 
+    watch_display_text(WATCH_POSITION_BOTTOM, buf);
+}
+
+/// @brief display a temperature
+/// @param temperature_c temperature in Celsius
+/// @param in_fahrenheit true to display in Fahrenheit, false to display Celsius
+static void temperature_prediction_face_display_temperature(float temperature_c ) {
+    if (movement_use_imperial_units()) watch_display_float_with_best_effort(temperature_c * 1.8 + 32.0, "#F");
+    else watch_display_float_with_best_effort(temperature_c, "#C");
+}
+
+/// @brief display current settings on the watch face
+/// @param state face state containing settings values
+/// @param subsecond current subsecond value used for blink timing
+/// @return false if invalid setting state
+static bool temperature_prediction_face_display_settings(temperature_prediction_state_t *state, uint8_t subsecond) {
+    char buf[8];
+    watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "      ", "      ");
+    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+
+    if (state->settings_state == 0) { //buffer size
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BUF", "BU");
+        sprintf(buf, "%6d", state->buffer_size);
+        if (subsecond % 2 || state->quick_ticks_running) watch_display_text(WATCH_POSITION_BOTTOM, buf);
+        else watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    } 
+    else if (state->settings_state == 1) { //average count
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVG", "AV");
+        sprintf(buf, "%6d", state->average_count);
+        if (subsecond % 2 || state->quick_ticks_running) watch_display_text(WATCH_POSITION_BOTTOM, buf);
+        else watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    } 
+    else if(state->settings_state == 2) { //cap
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "CAP", "CA");
+        sprintf(buf, "%6d", state->cap);
+        if (subsecond % 2 || state->quick_ticks_running) watch_display_text(WATCH_POSITION_BOTTOM, buf);
+        else watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    }
+    else if (state->settings_state == 3) { //units
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "UNI", "UN");
+        if (subsecond % 2 || state->quick_ticks_running) 
+            watch_display_text(WATCH_POSITION_SECONDS, movement_use_imperial_units() ? "#F" : "#C");
+    } 
+    else if (state->settings_state >= 4 && state->settings_state <= 9) { //coefficient
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
+        temperature_prediction_face_display_coefficient(state->coefficient);
+        if (subsecond % 2 && !state->quick_ticks_running) 
+            watch_display_string(" ", state->settings_state);
+    } 
+    else if (state->settings_state == 10) { //start coefficient calculation
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
+        watch_display_text(WATCH_POSITION_BOTTOM, "CALC  ");
+        if (subsecond % 2 || state->quick_ticks_running) 
+            watch_display_text(WATCH_POSITION_SECONDS, state->start_coefficient_calculation ? " y" : " n");
+    } else {
+        return false; 
+    }
+    return true;
+}
+
+/// @brief increase the active setting value
+/// @param state face state containing the selected setting
+/// @param forward true to increment, false to decrement
+static void temperature_prediction_face_advance_settings(temperature_prediction_state_t *state) {
+    int coeff;
+    int step;
+    
+    if (state->settings_state == 0) { //buffer size
+        state->buffer_size = state->buffer_size + 1 > TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX ? 2 : state->buffer_size + 1;
+    } 
+    else if (state->settings_state == 1) { //average count
+        state->average_count = state->average_count + 1 > TEMPERATURE_PREDICTION_AVERAGING_MAX ? 1 : state->average_count + 1;
+    } 
+    else if (state->settings_state == 2) { //cap
+        state->cap = state->cap + 1 > 30 ? 0 : state->cap + 1;
+    }
+    else if (state->settings_state == 3) { //units
+        movement_set_use_imperial_units(!movement_use_imperial_units());
+    } 
+    else if (state->settings_state >= 4 && state->settings_state <= 9) { //coefficient
+        //set coefficient, increasing or decreasing one digit at a time, with wrap-around
+        coeff = (int)(state->coefficient * 100000 + 0.5); // 0.0013240584 -> 000132
+        step = 1;
+        for (int i = 0; i < 9 - state->settings_state; i++) step *= 10;
+        coeff += ((coeff / step) % 10 == 9 ? -9 * step : step);
+        state->coefficient = ((float)coeff) / 100000;
+    } 
+    else if (state->settings_state == 10) { //start coefficient calculation
+        state->start_coefficient_calculation = !state->start_coefficient_calculation;
+    }
+}
+
+/// @brief calculate temperature deviation
+static float temperature_correction_face_calculate_error(temperature_prediction_state_t *state) {
+    if (state->calculated_averages.length < 1) {
+        return 0; 
+    }
+    float min = state->calculated_averages.data[0];
+    float max = state->calculated_averages.data[0];
+    for (int i = 1; i < state->calculated_averages.length; i++) {
+        if (state->calculated_averages.data[i] < min) min = state->calculated_averages.data[i]; // Update minimum
+        if (state->calculated_averages.data[i] > max) max = state->calculated_averages.data[i]; // Update maximum
+    }
+    return max - min;
+}    
+
+/// @brief update WATCH_POSITION_TOP_RIGHT and WATCH_POSITION_BOTTOM according to state (running / coefficient calculation)
+static void temperature_prediction_face_update_display(temperature_prediction_state_t *state, float temperature) {
+    char buf[8];
+
+    if (state->mode == temperature_prediction_coefficient) {         
+        //WATCH_POSITION_BOTTOM
+        if (state->show_real_temperature) {
+            temperature_prediction_face_display_temperature(temperature == -999 ? movement_get_temperature() : temperature);
+        } else {
+            watch_display_text(WATCH_POSITION_BOTTOM, "COEFF ");    
+        }
+
+        //WATCH_POSITION_TOP_RIGHT   
+        sprintf(buf, "%2d", state->buffer.length);   
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+    } else if (state->mode == temperature_prediction_running) {
+        //WATCH_POSITION_BOTTOM
+        if (temperature != -999) {
+            temperature_prediction_face_display_temperature(temperature);
+        } else if (state->show_real_temperature || state->ema == -999) {
+            temperature_prediction_face_display_temperature(movement_get_temperature());
+        } else {
+            temperature_prediction_face_display_temperature(state->ema);
+        }
+
+        //WATCH_POSITION_TOP_RIGHT   
+        if (state->show_real_temperature) {
+            watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        } else {   
+            float error = 0;
+            if (state->error_mode == 1) { //ema
+                error = state->ema_error == -999 ? 0 : (state->ema_error * 10.0);            
+            } else if (state->error_mode == 2) { //variance
+                error = state->variance == -999 ? 0 : state->variance;   
+            } else if (state->error_mode == 3) { //variance max
+                error = state->variance_max == -999 ? 0 : state->variance_max;   
+            } else if (state->error_mode == 4) { //minmax
+                error = temperature_correction_face_calculate_error(state);          
+            }
+
+            if (error > 99) {
+                sprintf(buf, "99");   
+            } else {
+                int err = (int)(error + 0.5);
+                sprintf(buf, "%2d", err);   
+            }
+            watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+        }
+    } 
+}
+
+/// @brief update WATCH_POSITION_TOP_LEFT according to state (running+temp / running+calc / coefficient calculation)
+static void temperature_prediction_face_update_display_top_left(temperature_prediction_state_t *state) {
+    if (state->mode == temperature_prediction_coefficient) {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "COE", "CO");
+    } else if (state->show_real_temperature) {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEM", "TE");
+    } else if (state->apply_hack) {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "HAC", "HC");
+    } else {
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "EST", "ET");
+    }
+
+    if(state->mode != temperature_prediction_coefficient) {
+        char buf[8];
+        sprintf(buf, "%1d", state->error_mode);   
+        watch_display_string(buf, 1);
+    }
+}
+
+/// @brief (re)start temperature logging or coefficient calculation
+static void temperature_prediction_face_start_logging(temperature_prediction_state_t *state, bool coefficient_calculation) {
+    if (coefficient_calculation) {
+        temperature_prediction_face_init_rolling_buffer(&state->buffer, TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX);
+        state->show_real_temperature = false;
+        state->mode = temperature_prediction_coefficient;
+    } else {
+        temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
+        temperature_prediction_face_init_rolling_buffer(&state->calculated_averages, 60);
+        state->ema = -999;
+        state->ema_error = -999;
+        state->variance = -999;
+        state->variance_max = -999;
+        state->mode = temperature_prediction_running;
+    }
+    temperature_prediction_face_update_display_top_left(state);
+    temperature_prediction_face_update_display(state, -999); 
+}
+
+void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context_ptr) {
+    (void) watch_face_index;
+
+    if (*context_ptr == NULL) {
+        *context_ptr = malloc(sizeof(temperature_prediction_state_t));
+        memset(*context_ptr, 0, sizeof(temperature_prediction_state_t));
+
+        temperature_prediction_state_t *state = (temperature_prediction_state_t *)*context_ptr;       
+        state->buffer.data = malloc(TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX * sizeof(float));
+        state->calculated_averages.data = malloc(60 * sizeof(float));
+        
+        state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
+        state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
+        state->average_count = TEMPERATURE_PREDICTION_DEFAULT_AVERAGE_COUNT;
+        state->cap = 30;
+        state->show_real_temperature = true;
+        state->apply_hack = false;
+        state->error_mode = 1;
+    }
+}
+
+void temperature_prediction_face_activate(void *context) {
+    movement_request_tick_frequency(1);
+}
+
+bool temperature_prediction_face_loop(movement_event_t event, void *context) {
+    temperature_prediction_state_t *state = (temperature_prediction_state_t *)context;
+
+    switch (event.event_type) {
+        case EVENT_ACTIVATE: 
+            temperature_prediction_face_start_logging(state, false);
+            break;
+        case EVENT_LIGHT_BUTTON_DOWN:
+            switch (state->mode) {
+                case temperature_prediction_running:
+                    state->error_mode++;
+                    if (state->error_mode > 4) {
+                        state->error_mode = 1;
+                    }
+                case temperature_prediction_coefficient:              
+                case temperature_prediction_waiting:
+                    movement_illuminate_led();
+                    break;
+                case temperature_prediction_setting: // flip through settings
+                    state->settings_state++;
+                    if (!temperature_prediction_face_display_settings(state, event.subsecond)) { //last setting
+                        movement_request_tick_frequency(1);
+                        temperature_prediction_face_start_logging(state, state->start_coefficient_calculation);
+                    }
+                    break;
+            }
+            break;
+        case EVENT_LIGHT_LONG_PRESS:
+            switch (state->mode) {
+                case temperature_prediction_coefficient:    
+                    break; //no settings in coefficient, as exiting settings starts temperature_prediction_running
+                case temperature_prediction_waiting: //fallthrough
+                case temperature_prediction_running: //enter settings
+                    state->mode = temperature_prediction_setting;
+                    state->settings_state = 0;
+                    state->start_coefficient_calculation = false;
+                    state->quick_ticks_running = false;
+                    movement_request_tick_frequency(4); // we need to blink in settings
+                    temperature_prediction_face_display_settings(state, event.subsecond);
+                    break;
+                case temperature_prediction_setting: //exit settings
+                    movement_request_tick_frequency(1);
+                    temperature_prediction_face_start_logging(state, state->start_coefficient_calculation);
+                    break;
+            }
+            break;
+        case EVENT_ALARM_BUTTON_UP: 
+            switch (state->mode) {
+                case temperature_prediction_waiting: // start logging
+                    temperature_prediction_face_start_logging(state, false);
+                    break;
+                case temperature_prediction_coefficient: //fallthrough
+                    state->show_real_temperature = !state->show_real_temperature;
+                    break;
+                case temperature_prediction_running: //toggle "show real temp" 
+                    if(state->show_real_temperature) {
+                        state->show_real_temperature = false;
+                        state->apply_hack = false;
+                    } else if (state->apply_hack) {
+                        state->apply_hack = false;
+                        state->show_real_temperature = true;
+                    } else {
+                        state->apply_hack = true;
+                        state->show_real_temperature = false;
+                    }
+                    
+                    temperature_prediction_face_update_display_top_left(state);
+                    temperature_prediction_face_update_display(state, -999);
+                    break;
+                case temperature_prediction_setting: 
+                    break;
+            }
+            break;
+        case EVENT_ALARM_BUTTON_DOWN: 
+            switch (state->mode) {
+                case temperature_prediction_setting: // advance settings
+                    temperature_prediction_face_advance_settings(state); 
+                    temperature_prediction_face_display_settings(state, event.subsecond);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case EVENT_ALARM_LONG_PRESS:
+            switch (state->mode) {
+                case temperature_prediction_coefficient: // stop logging
+                    temperature_prediction_face_start_logging(state, false);
+                    break;
+                case temperature_prediction_setting: // quick settings
+                    state->quick_ticks_running = true;
+                    movement_request_tick_frequency(8);
+                    break;
+                case temperature_prediction_running: // restart logging (clear buffer)
+                    temperature_prediction_face_start_logging(state, false);
+                    break;
+                case temperature_prediction_waiting: 
+                    break;
+            }
+            break;
+        case EVENT_ALARM_LONG_UP:
+            if (state->mode == temperature_prediction_setting && state->quick_ticks_running ) {
+                state->quick_ticks_running = false;
+                movement_request_tick_frequency(4); // we need to blink in settings
+            }
+            break;
+        case EVENT_TICK:
+            switch (state->mode) {
+                case temperature_prediction_waiting:
+                    break;
+                case temperature_prediction_running:
+                    if(watch_rtc_get_date_time().unit.second % 2) watch_clear_indicator(WATCH_INDICATOR_SIGNAL);
+                    else watch_set_indicator(WATCH_INDICATOR_SIGNAL);       
+
+                    temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature()); 
+                    temperature_prediction_face_calculate_ema(state);
+                    float temp_to_show = state->apply_hack ? temperature_prediction_face_improve_ema(state) : state->ema;
+                    temperature_prediction_face_update_display(state, state->show_real_temperature || state->ema == -999 ? state->buffer.data[state->buffer.head_index] : temp_to_show);
+                    break;
+                case temperature_prediction_setting: 
+                    if (state->quick_ticks_running) {
+                        temperature_prediction_face_advance_settings(state);
+                    }
+                    temperature_prediction_face_display_settings(state, event.subsecond);
+                    break;
+                case temperature_prediction_coefficient:
+                        if(watch_rtc_get_date_time().unit.second % 2) watch_set_indicator(WATCH_INDICATOR_SIGNAL);
+                        else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);              
+                        float temperature= movement_get_temperature();
+
+                        if (watch_rtc_get_date_time().unit.second == 0) { //once a minute
+                            temperature_prediction_face_add_to_rolling_buffer(&state->buffer, temperature);
+                            if (state->buffer.length == state->buffer.max) { //buffer full
+                                state->mode = temperature_prediction_waiting;
+                                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
+                                break;
+                            } else if (state->buffer.length >= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES) { //only after n minutes
+                                if (temperature_prediction_face_equilibrium_reached(&state->buffer)) { //temperature is stable: stop calculation
+                                    state->coefficient = temperature_prediction_face_calculate_coefficient_with_linear_regression(&state->buffer, TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_IGNORE_START_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_END_TEMP_DELTA);
+                                    //coefficient must be positive and shall only have 1 integer place and 5 decimal places, otherwise we can not properly show it 
+                                    state->coefficient = roundf(state->coefficient * 100000.0f) / 100000.0f;
+                                    if (state->coefficient < 0) {
+                                        state->coefficient = 0;
+                                    } else if (state->coefficient > 9.99999) {
+                                        state->coefficient = 9.99999;
+                                    }
+                                    state->mode = temperature_prediction_waiting;
+                                    temperature_prediction_face_display_coefficient(state->coefficient);
+                                    break;
+                                }
+                            }
+                        }
+                        temperature_prediction_face_update_display(state, temperature);
+                    break;
+            }
+            break;
+        case EVENT_TIMEOUT:
+            //no timeout
+            break;
+        default:
+            return movement_default_loop_handler(event);
+    }
+
+    return true;
+}
+
+void temperature_prediction_face_resign(void *context) {
+    (void) context;
+
+    // handle any cleanup before your watch face goes off-screen.
+}
+
