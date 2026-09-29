@@ -208,12 +208,12 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
     switch (state->status) {
         case SW_STATUS_IDLE:
             switch (event_type) {
-                case EVENT_ALARM_BUTTON_DOWN:
+                case EVENT_ALARM_BUTTON_UP:
                     state->status = SW_STATUS_RUNNING;
                     state->start_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
                     return;   
-                case EVENT_LIGHT_BUTTON_DOWN:
+                case EVENT_LIGHT_BUTTON_UP:
                     state->old_status = state->status;
                     state->status = SW_STATUS_LOG;
                     state->log_index = state->buffer.head_index;
@@ -224,13 +224,13 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
 
         case SW_STATUS_RUNNING:
             switch (event_type) {
-                case EVENT_LIGHT_BUTTON_DOWN:
+                case EVENT_LIGHT_BUTTON_UP:
                     state->sound_enabled = !state->sound_enabled;
                     if (state->sound_enabled) {
                         state->sound_second = watch_rtc_get_date_time().unit.second;
                     }
                     break;
-                case EVENT_ALARM_BUTTON_DOWN:
+                case EVENT_ALARM_BUTTON_UP:
                     state->sound_enabled = false;
                     state->status = SW_STATUS_STOPPED;
                     state->stop_counter = counter;
@@ -269,10 +269,10 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
 
         case SW_STATUS_CLEAR_CURRENT:
             switch (event_type) {
-                case EVENT_ALARM_BUTTON_DOWN:
+                case EVENT_ALARM_BUTTON_UP:
                     state->clear_yes = !state->clear_yes;
                     return;
-                case EVENT_LIGHT_BUTTON_DOWN:
+                case EVENT_LIGHT_BUTTON_UP:
                     //force full redraw
                     state->old_display.seconds = UINT_MAX;
                     state->old_display.minutes = UINT_MAX;
@@ -292,10 +292,10 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
 
         case SW_STATUS_CLEAR_LOG:
             switch (event_type) {
-                case EVENT_ALARM_BUTTON_DOWN:
+                case EVENT_ALARM_BUTTON_UP:
                     state->clear_yes = !state->clear_yes;
                     return;
-                case EVENT_LIGHT_BUTTON_DOWN:
+                case EVENT_LIGHT_BUTTON_UP:
                     if (state->clear_yes) {
                         state->buffer.data[state->log_index].elapsed = 0;
                     }
@@ -318,7 +318,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->status = SW_STATUS_CLEAR_LOG;
                     state->clear_yes = false;
                     return;
-                case EVENT_ALARM_BUTTON_DOWN:
+                case EVENT_ALARM_BUTTON_UP:
                     if (state->buffer.length != 0) {
                         state->log_index = (state->log_index - 1) % state->buffer.length;
                     }
