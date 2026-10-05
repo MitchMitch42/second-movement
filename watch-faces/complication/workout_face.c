@@ -405,6 +405,10 @@ void workout_face_activate(void *context) {
     state->sound_enabled = false;
     movement_request_tick_frequency(get_refresh_rate(state));
     workout_face_fix_buffer(state);
+
+    if(state->status == SW_STATUS_CLEAR_CURRENT || state->status == SW_STATUS_CLEAR_LOG || state->status == SW_STATUS_CLEAR_AVERAGE || state->status == SW_STATUS_LOG) {
+        state->status = state->old_status;
+    }
 }
 
 bool workout_face_loop(movement_event_t event, void *context) {
