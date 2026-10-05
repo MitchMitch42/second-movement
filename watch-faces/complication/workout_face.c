@@ -148,14 +148,17 @@ static void workout_face_draw_colon(workout_state_t *state, uint32_t elapsed) {
         case SW_STATUS_RUNNING:
             subsecond = elapsed & 127;
             tock = subsecond >= 64;
-
             if (tock) {
                 watch_clear_colon();
             } else {
                 watch_set_colon();
             }
-
             return;
+        case SW_STATUS_CLEAR_CURRENT:
+        case SW_STATUS_CLEAR_LOG:
+        case SW_STATUS_CLEAR_AVERAGE:
+            watch_clear_colon();    
+            return; 
         default:
             watch_set_colon();
             return;
