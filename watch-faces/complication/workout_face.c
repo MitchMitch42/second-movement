@@ -24,6 +24,7 @@ typedef enum {
     SW_STATUS_STOPPED,
     SW_STATUS_CLEAR_CURRENT,
     SW_STATUS_CLEAR_LOG,
+    SW_STATUS_CLEAR_AVERAGE,
     SW_STATUS_LOG,
 } stopwatch_status_t;
 
@@ -89,6 +90,11 @@ static void workout_face_display(workout_state_t *state, uint32_t ticks) {
 
     if (state->status == SW_STATUS_CLEAR_CURRENT || state->status == SW_STATUS_CLEAR_LOG) {
         watch_display_text(WATCH_POSITION_BOTTOM, state->clear_yes ? "CLEA y" : "CLEA n");
+        return;
+    }
+
+    if (state->status == SW_STATUS_CLEAR_AVERAGE) {
+        watch_display_text(WATCH_POSITION_BOTTOM, state->clear_yes ? "INIT y" : "INIT n");
         return;
     }
 
@@ -187,6 +193,7 @@ static uint32_t elapsed_time(workout_state_t *state, rtc_counter_t counter) {
     }
 }
 
+/// @brief initialize the buffer to show the last n days, even if those days have not gotten any value because I skipped workout
 static void workout_face_fix_buffer(workout_state_t *state) {
     uint32_t today_timestamp = movement_get_utc_timestamp() / 86400U;
 
@@ -316,6 +323,23 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     return;
             }
 
+        case SW_STATUS_CLEAR_AVERAGE:
+            switch (event_type) {
+                case EVENT_ALARM_BUTTON_UP:
+                    state->clear_yes = !state->clear_yes;
+                    return;
+                case EVENT_LIGHT_BUTTON_UP:
+                    if (state->clear_yes) {
+                        workout_face_init_rolling_buffer(&state->buffer, WORKOUT_BUFFER_SIZE_MAX);
+                        workout_face_fix_buffer(state);
+                    }
+                    state->clear_yes = false;
+                    state->status = SW_STATUS_LOG;
+                    return;
+                default:
+                    return;
+            }
+
         case SW_STATUS_LOG:
             switch (event_type) {
                 case EVENT_LIGHT_BUTTON_UP:
@@ -325,7 +349,10 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->old_display.hours = UINT_MAX;
                     return;
                 case EVENT_LIGHT_LONG_PRESS:
-                    if (state->log_index != -1) {
+                    if (state->log_index == -1) {
+                        state->status = SW_STATUS_CLEAR_AVERAGE;
+                        state->clear_yes = false;
+                    } else {
                         state->status = SW_STATUS_CLEAR_LOG;
                         state->clear_yes = false;
                     }
