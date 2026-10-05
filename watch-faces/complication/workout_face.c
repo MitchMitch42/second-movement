@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <math.h>
 #include "workout_face.h"
 #include "watch.h"
 #include "watch_common_display.h"
@@ -85,8 +86,17 @@ static void workout_face_show_log(workout_state_t *state) {
 }
 
 static void workout_face_display(workout_state_t *state, uint32_t ticks) {
-    if (state->sound_enabled) watch_set_indicator(WATCH_INDICATOR_BELL);
-    else watch_clear_indicator(WATCH_INDICATOR_BELL);
+    char buf[4];
+    
+    if (state->sound_enabled) {
+        watch_set_indicator(WATCH_INDICATOR_BELL);
+        int seconds_to_go = ((int)state->sound_second - (int)watch_rtc_get_date_time().unit.second) % 60;
+        sprintf(buf, "%2d", seconds_to_go);
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+    } else {
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_clear_indicator(WATCH_INDICATOR_BELL);
+    }
 
     if (state->status == SW_STATUS_CLEAR_CURRENT || state->status == SW_STATUS_CLEAR_LOG) {
         watch_display_text(WATCH_POSITION_BOTTOM, state->clear_yes ? "CLEA y" : "CLEA n");
@@ -103,9 +113,6 @@ static void workout_face_display(workout_state_t *state, uint32_t ticks) {
         return;
     }
 
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-
-    char buf[3];
     uint32_t seconds = ticks >> 7;
 
     if (seconds == state->old_display.seconds) {
