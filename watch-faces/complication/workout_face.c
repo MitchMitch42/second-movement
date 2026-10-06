@@ -95,7 +95,7 @@ static void workout_face_display(workout_state_t *state, uint32_t ticks) {
     
     if (state->sound_enabled) {
         watch_set_indicator(WATCH_INDICATOR_BELL);
-        int seconds_to_go = ((int)state->sound_second - (int)watch_rtc_get_date_time().unit.second) % 60;
+        int seconds_to_go = ((int)state->sound_second - ((int)((ticks >> 7) % 60)) + 60) % 60;
         sprintf(buf, "%2d", seconds_to_go);
         watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
     } else {
@@ -259,7 +259,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                 case EVENT_LIGHT_BUTTON_UP:
                     state->sound_enabled = !state->sound_enabled;
                     if (state->sound_enabled) {
-                        state->sound_second = watch_rtc_get_date_time().unit.second;
+                        state->sound_second = (elapsed_time(state, counter) >> 7) % 60;
                         state->sound_count = 0; //start with normal beep
                     }
                     return;
@@ -426,7 +426,7 @@ bool workout_face_loop(movement_event_t event, void *context) {
     state_transition(state, counter, event.event_type);
     rtc_counter_t elapsed = elapsed_time(state, counter);
 
-    if (state->sound_enabled && state->sound_second == watch_rtc_get_date_time().unit.second) {
+    if (state->sound_enabled && state->sound_second == (elapsed >> 7) % 60) {
         state->sound_second = state->sound_second + 30 < 60 ? state->sound_second + 30 : state->sound_second - 30;
         if(state->sound_count == 2) {
             watch_buzzer_play_sequence((int8_t *)workout_double_beep, NULL);
