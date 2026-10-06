@@ -16,7 +16,7 @@
 #include "watch_rtc.h"
 #include "slcd.h"
 
-#define WORKOUT_BUFFER_SIZE_MAX 7
+#define WORKOUT_BUFFER_SIZE_MAX 8
 
 // Loosely implement the watch as a state machine
 typedef enum {
