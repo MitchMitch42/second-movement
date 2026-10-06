@@ -79,7 +79,7 @@ static void workout_face_show_log(workout_state_t *state) {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "AV", "AV");
     } else {
         watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->buffer.data[state->log_index].timestamp * 86400U, movement_get_current_timezone_offset());
-        sprintf(top_right, "%02u", dt.unit.day);
+        sprintf(top_right, "%s", watch_utility_get_weekday(dt));
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
     }
 }
