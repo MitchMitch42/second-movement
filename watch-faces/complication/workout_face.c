@@ -426,11 +426,11 @@ bool workout_face_loop(movement_event_t event, void *context) {
     if (state->sound_enabled && state->sound_second == watch_rtc_get_date_time().unit.second) {
         state->sound_second = state->sound_second + 30 < 60 ? state->sound_second + 30 : state->sound_second - 30;
         if(state->sound_count == 2) {
-            movement_play_note(BUZZER_NOTE_C9, 25);
+            movement_play_note(BUZZER_NOTE_C8, 25);
             movement_play_note(BUZZER_NOTE_REST, 10);
-            movement_play_note(BUZZER_NOTE_C9, 25);
+            movement_play_note(BUZZER_NOTE_C8, 25);
         } else {
-            movement_play_note(BUZZER_NOTE_C8, 50);
+            movement_play_note(BUZZER_NOTE_G7, 50);
         }
 
         state->sound_count = (state->sound_count == 1) ? 2 : 1;
