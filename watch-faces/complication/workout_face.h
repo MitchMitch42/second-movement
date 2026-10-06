@@ -35,7 +35,8 @@ typedef struct {
     int8_t log_index;            // index of the day currently being displayed in the log
     bool clear_yes;              // true when the clear confirmation has been set to yes
     bool sound_enabled;              // true if every 30 seconds there shall be a sound, and also a 30 sec countdown will be shown
-    uint32_t sound_second;         // at which second shall the next sound be shown    
+    int sound_count;           // if 2: next sound is double beep, otherwise single beep
+    uint8_t sound_second;         // at which second shall the next sound be shown    
     workout_rolling_buffer_t buffer;
     struct {
         rtc_counter_t seconds;

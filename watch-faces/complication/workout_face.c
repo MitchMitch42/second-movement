@@ -29,7 +29,6 @@ typedef enum {
     SW_STATUS_LOG,
 } stopwatch_status_t;
 
-
 // How quickly should the elapsing time be displayed?
 // This is just for looks, timekeeping is always accurate to 128Hz
 static const uint8_t DISPLAY_RUNNING_RATE = 32;
@@ -255,6 +254,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->sound_enabled = !state->sound_enabled;
                     if (state->sound_enabled) {
                         state->sound_second = watch_rtc_get_date_time().unit.second;
+                        state->sound_count = 0; //start with normal beep
                     }
                     return;
                 case EVENT_ALARM_BUTTON_UP:
@@ -421,7 +421,15 @@ bool workout_face_loop(movement_event_t event, void *context) {
 
     if (state->sound_enabled && state->sound_second == watch_rtc_get_date_time().unit.second) {
         state->sound_second = state->sound_second + 30 < 60 ? state->sound_second + 30 : state->sound_second - 30;
-        movement_play_note(BUZZER_NOTE_C8, 50);
+        if(state->sound_count == 2) {
+            movement_play_note(BUZZER_NOTE_C9, 25);
+            movement_play_note(BUZZER_NOTE_REST, 10);
+            movement_play_note(BUZZER_NOTE_C9, 25);
+        } else {
+            movement_play_note(BUZZER_NOTE_C8, 50);
+        }
+
+        state->sound_count = (state->sound_count == 1) ? 2 : 1;
     }
 
     switch (event.event_type) {
