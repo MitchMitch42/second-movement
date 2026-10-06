@@ -369,7 +369,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     return;
                 case EVENT_ALARM_BUTTON_UP:
                     if (state->buffer.length != 0) {
-                        state->log_index = state->log_index == -1 ? state->buffer.head_index : ((state->log_index - 1) % state->buffer.length);
+                        state->log_index = state->log_index == -1 ? state->buffer.head_index : ((state->log_index + state->buffer.length - 1) % state->buffer.length);
                     }
                     return;
                 default:
