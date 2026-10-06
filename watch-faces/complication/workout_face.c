@@ -51,7 +51,7 @@ static void workout_face_add_to_rolling_buffer(workout_rolling_buffer_t *buffer,
 
 static void workout_face_show_log(workout_state_t *state) {
     char bottom[11];
-    char top_right[3];
+    char top_right[4];
     if (state->buffer.length == 0) {
         watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "no dat", "no dat");
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "  ", "  ");
@@ -76,11 +76,14 @@ static void workout_face_show_log(workout_state_t *state) {
     sprintf(bottom, "%02lu%02lu%02lu", hours, minutes, seconds);
     watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, bottom, bottom);
     if (state->log_index == -1) {
-        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, "AV", "AV");
+        sprintf(top_right, "%2d", state->buffer.length);
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVE", "AV");
     } else {
         watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->buffer.data[state->log_index].timestamp * 86400U, movement_get_current_timezone_offset());
-        sprintf(top_right, "%s", watch_utility_get_weekday(dt));
+        sprintf(top_right, "%2d", dt.unit.day);
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, watch_utility_get_long_weekday(dt), watch_utility_get_weekday(dt));
     }
 }
 
@@ -357,6 +360,7 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
                     state->old_display.seconds = UINT_MAX;
                     state->old_display.minutes = UINT_MAX;
                     state->old_display.hours = UINT_MAX;
+                    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "WOK", "WO");
                     return;
                 case EVENT_LIGHT_LONG_PRESS:
                     if (state->log_index == -1) {
