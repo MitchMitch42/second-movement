@@ -33,6 +33,9 @@ typedef enum {
 // This is just for looks, timekeeping is always accurate to 128Hz
 static const uint8_t DISPLAY_RUNNING_RATE = 32;
 
+int8_t workout_double_beep[] = {BUZZER_NOTE_C8, 4, BUZZER_NOTE_REST, 5, BUZZER_NOTE_C8, 5, 0};
+int8_t workout_single_beep[] = {BUZZER_NOTE_C7, 4, 0};
+
 /// @brief reset a rolling buffer
 /// @param usable_length maximum number of entries the buffer can hold
 static void workout_face_init_rolling_buffer(workout_rolling_buffer_t *buffer, int usable_length) {
@@ -426,11 +429,9 @@ bool workout_face_loop(movement_event_t event, void *context) {
     if (state->sound_enabled && state->sound_second == watch_rtc_get_date_time().unit.second) {
         state->sound_second = state->sound_second + 30 < 60 ? state->sound_second + 30 : state->sound_second - 30;
         if(state->sound_count == 2) {
-            movement_play_note(BUZZER_NOTE_C8, 25);
-            movement_play_note(BUZZER_NOTE_REST, 10);
-            movement_play_note(BUZZER_NOTE_C8, 25);
+            watch_buzzer_play_sequence((int8_t *)workout_double_beep, NULL);
         } else {
-            movement_play_note(BUZZER_NOTE_G7, 50);
+            watch_buzzer_play_sequence((int8_t *)workout_single_beep, NULL);
         }
 
         state->sound_count = (state->sound_count == 1) ? 2 : 1;
