@@ -31,6 +31,28 @@ typedef enum {
 
 int8_t workout_double_beep[] = {BUZZER_NOTE_C8, 4, BUZZER_NOTE_REST, 5, BUZZER_NOTE_C8, 5, 0};
 
+int8_t workout_tune_start[] = {
+    BUZZER_NOTE_G5, 8,
+    BUZZER_NOTE_F5SHARP_G5FLAT, 8,
+    BUZZER_NOTE_D5SHARP_E5FLAT, 8,
+    BUZZER_NOTE_A4, 8,
+    BUZZER_NOTE_G4SHARP_A4FLAT, 8,
+    BUZZER_NOTE_E5, 8,
+    BUZZER_NOTE_G5SHARP_A5FLAT, 8,
+    BUZZER_NOTE_C6, 20,
+    0
+};
+
+int8_t workout_tune_pause[] =
+{
+    BUZZER_NOTE_C6, 4,
+    BUZZER_NOTE_REST, 5,
+    BUZZER_NOTE_C7, 4,
+    BUZZER_NOTE_REST, 5,
+    -4, 1,
+    0
+};
+
 // How quickly should the elapsing time be displayed?
 // This is just for looks, timekeeping is always accurate to 128Hz
 static const uint8_t DISPLAY_RUNNING_RATE = 32;
@@ -254,6 +276,8 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
         case SW_STATUS_IDLE:
             switch (event_type) {
                 case EVENT_ALARM_BUTTON_UP:
+                case EVENT_ALARM_LONG_PRESS:
+                    movement_play_sequence((int8_t *)workout_tune_start, BUZZER_PRIORITY_BUTTON);
                     state->status = SW_STATUS_RUNNING;
                     state->start_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
@@ -269,20 +293,27 @@ static void state_transition(workout_state_t *state, rtc_counter_t counter, move
 
         case SW_STATUS_RUNNING:
             switch (event_type) {
-                case EVENT_LIGHT_BUTTON_UP:
+                case EVENT_ALARM_BUTTON_UP:
+                    if (state->sound_enabled) {
+                        movement_play_note(BUZZER_NOTE_C6, 50);
+                    }
                     state->sound_enabled = !state->sound_enabled;
                     if (state->sound_enabled) {
                         state->sound_second = (elapsed_time(state, counter) >> 7) % 60;
                         state->sound_count = 0; //start with normal beep
                     }
                     return;
-                case EVENT_ALARM_BUTTON_UP:
+                case EVENT_ALARM_LONG_PRESS:
+                    movement_play_sequence((int8_t *)workout_tune_pause, BUZZER_PRIORITY_BUTTON);
                     state->sound_enabled = false;
                     state->status = SW_STATUS_STOPPED;
                     state->stop_counter = counter;
                     movement_request_tick_frequency(get_refresh_rate(state));
                     return;
-                
+                case EVENT_LIGHT_BUTTON_UP:
+                case EVENT_LIGHT_LONG_PRESS:
+                    movement_illuminate_led();
+                    return;
                 default:
                     return;
             }
