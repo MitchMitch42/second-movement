@@ -44,7 +44,7 @@ static void workout_face_init_rolling_buffer(workout_rolling_buffer_t *buffer, i
 }
 
 /// @brief add a value to a rolling buffer
-static void workout_face_add_to_rolling_buffer(workout_rolling_buffer_t *buffer, uint32_t elapsed, uint32_t timestamp) {
+static void workout_face_add_to_rolling_buffer(workout_rolling_buffer_t *buffer, uint32_t elapsed, watch_date_time_t timestamp) {
     buffer->head_index = (buffer->head_index + 1) % buffer->max;
     buffer->length = buffer->length + 1 < buffer->max ? buffer->length + 1 : buffer->max;
     buffer->data[buffer->head_index].elapsed = elapsed;
@@ -82,7 +82,7 @@ static void workout_face_show_log(workout_state_t *state) {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "AVE", "AV");
     } else {
-        watch_date_time_t dt = watch_utility_date_time_from_unix_time(state->buffer.data[state->log_index].timestamp * 86400U, movement_get_current_timezone_offset());
+        watch_date_time_t dt = state->buffer.data[state->log_index].timestamp;
         sprintf(top_right, "%2d", dt.unit.day);
         watch_display_text_with_fallback(WATCH_POSITION_TOP_RIGHT, top_right, top_right);
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, watch_utility_get_long_weekday(dt), watch_utility_get_weekday(dt));
@@ -209,16 +209,19 @@ static uint32_t elapsed_time(workout_state_t *state, rtc_counter_t counter) {
 
 /// @brief initialize the buffer to show the last n days, even if those days have not gotten any value because I skipped workout
 static void workout_face_fix_buffer(workout_state_t *state) {
-    uint32_t today_timestamp = movement_get_utc_timestamp() / 86400U;
+    watch_date_time_t today_timestamp = movement_get_local_date_time();
 
     if (state->buffer.length == 0) { 
         //first value: simply add
         workout_face_add_to_rolling_buffer(&state->buffer, 0, today_timestamp);
     } else { 
         //fill the gaps between latest value and today
-        uint32_t latest_timestamp = state->buffer.data[state->buffer.head_index].timestamp;
-        for (uint32_t timestamp = latest_timestamp + 1; timestamp <= today_timestamp; timestamp++) {
-            workout_face_add_to_rolling_buffer(&state->buffer, 0, timestamp);
+        watch_date_time_t latest_timestamp = state->buffer.data[state->buffer.head_index].timestamp;
+        for (uint8_t day = latest_timestamp.unit.day + 1; day <= today_timestamp.unit.day; day++) {
+            watch_date_time_t new_timestamp;
+            new_timestamp.reg = latest_timestamp.reg;
+            new_timestamp.unit.day = day;
+            workout_face_add_to_rolling_buffer(&state->buffer, 0, latest_timestamp);
         }
     }
 }

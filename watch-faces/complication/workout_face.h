@@ -15,7 +15,7 @@
 #include "movement.h"
 
 typedef struct {
-    uint32_t timestamp;
+    watch_date_time_t timestamp;
     uint32_t elapsed; // elapsed time for the day in hundredths of a second
 } workout_day_total_t;
 
