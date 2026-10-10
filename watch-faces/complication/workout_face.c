@@ -214,15 +214,26 @@ static void workout_face_fix_buffer(workout_state_t *state) {
     if (state->buffer.length == 0) { 
         //first value: simply add
         workout_face_add_to_rolling_buffer(&state->buffer, 0, today_timestamp);
-    } else { 
-        //fill the gaps between latest value and today
-        watch_date_time_t latest_timestamp = state->buffer.data[state->buffer.head_index].timestamp;
-        for (uint8_t day = latest_timestamp.unit.day + 1; day <= today_timestamp.unit.day; day++) {
-            watch_date_time_t new_timestamp;
-            new_timestamp.reg = latest_timestamp.reg;
-            new_timestamp.unit.day = day;
-            workout_face_add_to_rolling_buffer(&state->buffer, 0, latest_timestamp);
-        }
+        return;
+    }
+
+    //fill the gaps between latest value and today, while preserving month/year rollover correctly
+    watch_date_time_t today_day = today_timestamp;
+    today_day.unit.hour = 0;
+    today_day.unit.minute = 0;
+    today_day.unit.second = 0;
+
+    watch_date_time_t next_day = state->buffer.data[state->buffer.head_index].timestamp;
+    next_day.unit.hour = 0;
+    next_day.unit.minute = 0;
+    next_day.unit.second = 0;
+
+    uint32_t today_unix = watch_utility_date_time_to_unix_time(today_day, movement_get_current_timezone_offset());
+    uint32_t next_unix = watch_utility_date_time_to_unix_time(next_day, movement_get_current_timezone_offset());
+
+    while (next_unix < today_unix) {
+        next_unix += 24U * 60U * 60U;
+        workout_face_add_to_rolling_buffer(&state->buffer, 0, watch_utility_date_time_from_unix_time(next_unix, movement_get_current_timezone_offset()));
     }
 }
 
