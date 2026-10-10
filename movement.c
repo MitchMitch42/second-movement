@@ -445,9 +445,13 @@ void movement_request_tick_frequency(uint8_t freq) {
 void movement_illuminate_led(void) {
     if (movement_state.settings.bit.led_duration != 0b111) {
         movement_state.light_on = true;
-        watch_set_led_color_rgb(movement_state.settings.bit.led_red_color | movement_state.settings.bit.led_red_color << 4,
-                                movement_state.settings.bit.led_green_color | movement_state.settings.bit.led_green_color << 4,
-                                movement_state.settings.bit.led_blue_color | movement_state.settings.bit.led_blue_color << 4);
+        if (movement_state.led_is_permanently_on) {
+            watch_set_led_color_rgb(0, 255, 0); //brightest color for torch mode
+        } else {
+            watch_set_led_color_rgb(movement_state.settings.bit.led_red_color | movement_state.settings.bit.led_red_color << 4,
+                                    movement_state.settings.bit.led_green_color | movement_state.settings.bit.led_green_color << 4,
+                                    movement_state.settings.bit.led_blue_color | movement_state.settings.bit.led_blue_color << 4);
+        }
        
         uint32_t timeout_seconds = 0;
         if (movement_state.led_is_permanently_on) {
