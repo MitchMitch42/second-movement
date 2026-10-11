@@ -380,7 +380,7 @@ static void temperature_prediction_face_update_display(temperature_prediction_st
             if (state->error_mode == 1) { //ema
                 error = state->ema_error == -999 ? 0 : (state->ema_error * 10.0);            
             } else if (state->error_mode == 2) { //variance
-                error = state->variance == -999 ? 0 : state->variance * 100.0;   
+                error = state->variance == -999 ? 0 : state->variance * 1000.0;   
             } else if (state->error_mode == 3) { //variance max
                 error = state->variance_max == -999 ? 0 : state->variance_max * 100.0;   
             } else if (state->error_mode == 4) { //minmax
