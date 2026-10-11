@@ -28,6 +28,7 @@
 #include "movement_custom_signal_tunes.h"
 
 static bool show_song_name;
+static bool setting_is_revertable;
 
 static void clock_setting_display(uint8_t subsecond) {
     show_song_name = false; //first setting: reset
@@ -117,6 +118,7 @@ static void signal_setting_advance(void) {
 
 static void tune_setting_display(uint8_t subsecond) {
     char buf[8];
+    setting_is_revertable = true;
     watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "song", "SO");
     if (!show_song_name) watch_display_text(WATCH_POSITION_BOTTOM, " SONG ");
     else watch_display_text(WATCH_POSITION_BOTTOM, tunesnamestable[movement_get_alarm_tune_index()]);
@@ -133,6 +135,14 @@ static void tune_setting_advance(void) {
     watch_display_text(WATCH_POSITION_BOTTOM, tunesnamestable[current_value]);
     show_song_name = true;
     movement_play_alarm();
+
+static void setting_revert(void) {
+    uint8_t current_value = movement_get_alarm_tune_index();
+    current_value = (current_value - 1) % 72; // there are 72 tunes 
+    movement_set_alarm_tune_index(current_value);
+    watch_display_text(WATCH_POSITION_BOTTOM, tunesnamestable[current_value]);
+    show_song_name = true;
+    movement_play_alarm_tune();
 }
 
 static void alarm_setting_display(uint8_t subsecond) {
@@ -418,6 +428,7 @@ void settings_face_activate(void *context) {
     settings_state_t *state = (settings_state_t *)context;
     state->current_page = 0;
     movement_request_tick_frequency(4); // we need to manually blink some pixels
+    setting_is_revertable = false;
 }
 
 bool settings_face_loop(movement_event_t event, void *context) {
@@ -425,6 +436,7 @@ bool settings_face_loop(movement_event_t event, void *context) {
 
     switch (event.event_type) {
         case EVENT_LIGHT_BUTTON_DOWN:
+            setting_is_revertable = false;
             state->current_page = (state->current_page + 1) % state->num_settings;
             watch_clear_display();
             // fall through
@@ -438,6 +450,11 @@ bool settings_face_loop(movement_event_t event, void *context) {
             return true;
         case EVENT_ALARM_BUTTON_UP:
             state->settings_screens[state->current_page].advance();
+            break;
+        case EVENT_ALARM_LONG_PRESS:
+            if(setting_is_revertable) {
+                setting_revert();
+            }
             break;
         case EVENT_TIMEOUT:
             movement_move_to_face(0);
