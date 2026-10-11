@@ -139,7 +139,7 @@ static void tune_setting_advance(void) {
 
 static void setting_revert(void) {
     uint8_t current_value = movement_get_alarm_tune_index();
-    current_value = (current_value - 1) % 72; // there are 72 tunes 
+    current_value = (current_value - 1 + 72) % 72; // there are 72 tunes 
     movement_set_alarm_tune_index(current_value);
     watch_display_text(WATCH_POSITION_BOTTOM, tunesnamestable[current_value]);
     show_song_name = true;
