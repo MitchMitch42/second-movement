@@ -134,7 +134,8 @@ static void tune_setting_advance(void) {
     movement_set_alarm_tune_index(current_value);
     watch_display_text(WATCH_POSITION_BOTTOM, tunesnamestable[current_value]);
     show_song_name = true;
-    movement_play_alarm();
+    movement_play_alarm_tune();
+}
 
 static void setting_revert(void) {
     uint8_t current_value = movement_get_alarm_tune_index();
