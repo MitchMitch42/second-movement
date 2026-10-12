@@ -101,6 +101,8 @@ static void clock_check_battery_periodically(clock_state_t *state, watch_date_ti
     uint16_t voltage = watch_get_vcc_voltage();
 
     state->battery_low = voltage < CLOCK_FACE_LOW_BATTERY_VOLTAGE_THRESHOLD;
+
+    clock_indicate_low_available_power(state);
 }
 
 static void clock_toggle_time_signal(clock_state_t *state) {
@@ -239,14 +241,14 @@ bool clock_face_loop(movement_event_t event, void *context) {
             clock_start_tick_tock_animation();
             clock_display_low_energy(movement_get_local_date_time());
             break;
-        case EVENT_TICK:
         case EVENT_ACTIVATE:
+            clock_indicate_low_available_power(state);
+        case EVENT_TICK:
             current = movement_get_local_date_time();
 
             clock_display_clock(state, current);
 
             clock_check_battery_periodically(state, current);
-            clock_indicate_low_available_power(state);
 
             state->date_time.previous = current;
 
