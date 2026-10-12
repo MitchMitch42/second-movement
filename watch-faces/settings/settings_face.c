@@ -25,8 +25,13 @@
 #include <stdlib.h>
 #include "settings_face.h"
 #include "watch.h"
+#include "movement_custom_signal_tunes.h"
+
+static bool show_song_name;
+static bool setting_is_revertable;
 
 static void clock_setting_display(uint8_t subsecond) {
+    show_song_name = false; //first setting: reset
     watch_display_text_with_fallback(WATCH_POSITION_TOP, "CLOCK", "CL");
     if (subsecond % 2) {
         if (movement_clock_mode_24h()) watch_display_text(WATCH_POSITION_BOTTOM, "24h");
@@ -111,6 +116,38 @@ static void signal_setting_advance(void) {
     movement_play_signal();
 }
 
+static void tune_setting_display(uint8_t subsecond) {
+    char buf[8];
+    setting_is_revertable = true;
+    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "song", "SO");
+    if (!show_song_name) watch_display_text(WATCH_POSITION_BOTTOM, " SONG ");
+    else watch_display_text(WATCH_POSITION_BOTTOM, tunesnamestable[movement_get_alarm_tune_index()]);
+    if (subsecond % 2) {
+        sprintf(buf, "%2d", movement_get_alarm_tune_index());
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+    } else {
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+    }
+}
+
+static void tune_setting_advance(void) {
+    uint8_t current_value = movement_get_alarm_tune_index();
+    current_value = (current_value + 1) % movement_get_num_alarm_tunes();  
+    movement_set_alarm_tune_index(current_value);
+    watch_display_text(WATCH_POSITION_BOTTOM, tunesnamestable[current_value]);
+    show_song_name = true;
+    movement_play_alarm_tune();
+}
+
+static void setting_revert(void) {
+    int num = movement_get_num_alarm_tunes();
+    uint8_t current_value = movement_get_alarm_tune_index();
+    current_value = (current_value - 1 + num) % num; 
+    movement_set_alarm_tune_index(current_value);
+    watch_display_text(WATCH_POSITION_BOTTOM, tunesnamestable[current_value]);
+    show_song_name = true;
+    movement_play_alarm_tune();
+}
 
 static void alarm_setting_display(uint8_t subsecond) {
     watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "ALM", "AL");
@@ -340,6 +377,9 @@ void settings_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         state->settings_screens[current_setting].display = signal_setting_display;
         state->settings_screens[current_setting].advance = signal_setting_advance;
         current_setting++;
+        state->settings_screens[current_setting].display = tune_setting_display;
+        state->settings_screens[current_setting].advance = tune_setting_advance;
+        current_setting++;
         state->settings_screens[current_setting].display = alarm_setting_display;
         state->settings_screens[current_setting].advance = alarm_setting_advance;
         current_setting++;
@@ -392,6 +432,7 @@ void settings_face_activate(void *context) {
     settings_state_t *state = (settings_state_t *)context;
     state->current_page = 0;
     movement_request_tick_frequency(4); // we need to manually blink some pixels
+    setting_is_revertable = false;
 }
 
 bool settings_face_loop(movement_event_t event, void *context) {
@@ -399,6 +440,7 @@ bool settings_face_loop(movement_event_t event, void *context) {
 
     switch (event.event_type) {
         case EVENT_LIGHT_BUTTON_DOWN:
+            setting_is_revertable = false;
             state->current_page = (state->current_page + 1) % state->num_settings;
             watch_clear_display();
             // fall through
@@ -412,6 +454,11 @@ bool settings_face_loop(movement_event_t event, void *context) {
             return true;
         case EVENT_ALARM_BUTTON_UP:
             state->settings_screens[state->current_page].advance();
+            break;
+        case EVENT_ALARM_LONG_PRESS:
+            if(setting_is_revertable) {
+                setting_revert();
+            }
             break;
         case EVENT_TIMEOUT:
             movement_move_to_face(0);

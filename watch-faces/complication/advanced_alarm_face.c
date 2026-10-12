@@ -36,20 +36,31 @@ typedef enum {
     alarm_setting_idx_day,
     alarm_setting_idx_hour,
     alarm_setting_idx_minute,
-    alarm_setting_idx_pitch,
-    alarm_setting_idx_beeps
+    alarm_setting_idx_beeps,
+    alarm_setting_idx_tune
 } alarm_setting_idx_t;
 
 static const char _dow_strings_classic[ALARM_DAY_STATES + 1][2] ={"AL",  "MO",  "TU",  "WE",  "TH",  "FR",  "SA",  "SU",  "ED",  "1t",  "MF",  "WN"};
 static const char _dow_strings_custom[ALARM_DAY_STATES + 1][3] ={ "AL ", "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN", "DAY", "1t ", "M-F", "WKD"};
-static const uint8_t _beeps_blink_idx = 9;
-static const watch_buzzer_note_t _buzzer_notes[3] = {BUZZER_NOTE_B6, BUZZER_NOTE_C8, BUZZER_NOTE_A8};
+static const uint8_t _beeps_blink_idx = 8;
 
 // Volume is indicated by the three segments 5D, 5G and 5A
 // This mapping is for classic LCD; if custom LCD is in use, we change it in the setup function.
 static uint8_t _buzzer_segdata[3][2] = {{0, 3}, {1, 3}, {2, 2}};
 
 static int8_t _wait_ticks;
+
+static uint8_t _beeps_to_play;    // temporary counter for ring signals playing
+static uint8_t _tune_to_play;     // temporary index of the tune to play
+
+static void advanced_alarm_signal_callback() {
+    if (_beeps_to_play) {
+        _beeps_to_play--;
+    }
+    if (_beeps_to_play) {
+        watch_buzzer_play_sequence((int8_t *)(movement_get_alarm_tune(_tune_to_play)), advanced_alarm_signal_callback);
+    }
+}
 
 static uint8_t _get_weekday_idx(watch_date_time_t date_time) {
     date_time.unit.year += 20;
@@ -95,7 +106,7 @@ static void _advanced_alarm_face_draw(alarm_state_t *state, uint8_t subsecond) {
     }
 
     // blink items if in settings mode
-    bool blinking = state->is_setting && subsecond % 2 && state->setting_state < alarm_setting_idx_pitch && !state->alarm_quick_ticks;
+    bool blinking = state->is_setting && subsecond % 2 && state->setting_state < alarm_setting_idx_tune && !state->alarm_quick_ticks;
     if (state->setting_state == alarm_setting_idx_alarm && blinking) {
         watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
     } else {
@@ -122,13 +133,16 @@ static void _advanced_alarm_face_draw(alarm_state_t *state, uint8_t subsecond) {
 
     if (state->is_setting) {
         watch_display_text(WATCH_POSITION_SECONDS, "  ");
-    // draw pitch level indicator
-        if ((subsecond % 2) == 0 || (state->setting_state != alarm_setting_idx_pitch)) {
-        for (i = 0; i <= state->alarm[state->alarm_idx].pitch && i < 3; i++)
-            watch_set_pixel(_buzzer_segdata[i][0], _buzzer_segdata[i][1]);
+        // draw tune indicator
+        if ((subsecond % 2) == 0 || (state->setting_state != alarm_setting_idx_tune)) {
+            sprintf(buf, "%2d", (state->alarm[state->alarm_idx].tune));
+            watch_display_text(WATCH_POSITION_SECONDS, buf);
+            if(state->setting_state == alarm_setting_idx_beeps) {
+                watch_display_character(' ', _beeps_blink_idx);
+            }
         }
         // draw beep rounds indicator
-        if ((subsecond % 2) == 0 || (state->setting_state != alarm_setting_idx_beeps)) {
+        if ((((subsecond % 2) == 0 || (state->setting_state != alarm_setting_idx_beeps) || (state->setting_state == alarm_setting_idx_tune && state->alarm[state->alarm_idx].tune < 10))) && (state->setting_state != alarm_setting_idx_tune || state->alarm[state->alarm_idx].tune < 10)) {
             if (state->alarm[state->alarm_idx].beeps == ALARM_MAX_BEEP_ROUNDS - 1)
                 watch_display_character('L', _beeps_blink_idx);
             else {
@@ -200,7 +214,7 @@ static void _alarm_update_alarm_enabled(alarm_state_t *state) {
     movement_set_alarm_enabled(active_alarms);
 }
 
-static void _alarm_play_short_beep(uint8_t pitch_idx) {
+static void _alarm_play_short_beep() {
     // play a short double beep
     static int8_t beep_sequence[] = {
         0, 4,
@@ -208,8 +222,8 @@ static void _alarm_play_short_beep(uint8_t pitch_idx) {
         0, 6,
         0
     };
-    beep_sequence[0] = _buzzer_notes[pitch_idx];
-    beep_sequence[4] = _buzzer_notes[pitch_idx];
+    beep_sequence[0] = BUZZER_NOTE_C8;
+    beep_sequence[4] = BUZZER_NOTE_C8;
 
     movement_play_sequence(beep_sequence, 0);
 }
@@ -218,10 +232,10 @@ static void _alarm_indicate_beep(alarm_state_t *state) {
     // play an example for the current beep setting
     if (state->alarm[state->alarm_idx].beeps == 0) {
         // short double beep
-        _alarm_play_short_beep(state->alarm[state->alarm_idx].pitch);
+        _alarm_play_short_beep();
     } else {
         // regular alarm beep
-        movement_play_alarm_beeps(1, _buzzer_notes[state->alarm[state->alarm_idx].pitch]);
+        watch_buzzer_play_sequence((int8_t *)(movement_get_alarm_tune(state->alarm[state->alarm_idx].tune)), NULL);
     }
 }
 
@@ -245,8 +259,18 @@ void advanced_alarm_face_setup(uint8_t watch_face_index, void **context_ptr) {
         for (uint8_t i = 0; i < ALARM_ALARMS; i++) {
             state->alarm[i].day = ALARM_DAY_EACH_DAY;
             state->alarm[i].beeps = 5;
-            state->alarm[i].pitch = 1;
+            state->alarm[i].tune = 0;
+            state->alarm[i].initialized = false;
         }
+
+        // watch_date_time_t now = movement_get_local_date_time();
+        // state->alarm[0].day = 7;
+        // state->alarm[0].hour = now.unit.minute == 59  && now.unit.hour == 23 ? 0 : now.unit.minute == 59 ? now.unit.hour + 1 : now.unit.hour;
+        // state->alarm[0].minute = now.unit.minute == 59 ? 0 : now.unit.minute + 1;
+        // state->alarm[0].tune = 0;
+        // state->alarm[0].beeps = 5;
+        // state->alarm[0].enabled = true;
+
         state->alarm_handled_minute = -1;
         _wait_ticks = -1;
 
@@ -264,6 +288,13 @@ void advanced_alarm_face_setup(uint8_t watch_face_index, void **context_ptr) {
 void advanced_alarm_face_activate(void *context) {
     (void) context;
     watch_set_colon();
+
+    // initialize the default alarm tune
+    for (uint8_t i = 0; i < ALARM_ALARMS; i++) {
+        if(!((alarm_state_t *)context)->alarm[i].initialized) {
+            ((alarm_state_t *)context)->alarm[i].tune = movement_get_alarm_tune_index();
+        }
+    }
 }
 
 void advanced_alarm_face_resign(void *context) {
@@ -389,9 +420,10 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
                 _abort_quick_ticks(state);
                 state->alarm[state->alarm_idx].minute = (state->alarm[state->alarm_idx].minute + 1) % 60;
                 break;
-            case alarm_setting_idx_pitch:
-                // pitch level
-                state->alarm[state->alarm_idx].pitch = (state->alarm[state->alarm_idx].pitch + 1) % 3;
+            case alarm_setting_idx_tune:
+                // tune selection
+                state->alarm[state->alarm_idx].tune = (state->alarm[state->alarm_idx].tune + 1) % movement_get_num_alarm_tunes();    
+                state->alarm[state->alarm_idx].initialized = true;
                 // play sound to show user what this is for
                 _alarm_indicate_beep(state);
                 break;
@@ -444,18 +476,19 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
         // play alarm
         if (state->alarm[state->alarm_playing_idx].beeps == 0) {
             // short beep
-            _alarm_play_short_beep(state->alarm[state->alarm_playing_idx].pitch);
+            _alarm_play_short_beep();
         } else {
             // regular alarm beeps
-            movement_play_alarm_beeps((state->alarm[state->alarm_playing_idx].beeps == (ALARM_MAX_BEEP_ROUNDS - 1) ? 20 : state->alarm[state->alarm_playing_idx].beeps), 
-                                  _buzzer_notes[state->alarm[state->alarm_playing_idx].pitch]);
+            _beeps_to_play = state->alarm[state->alarm_playing_idx].beeps == (ALARM_MAX_BEEP_ROUNDS - 1) ? 20 : state->alarm[state->alarm_playing_idx].beeps;
+            _tune_to_play = state->alarm[state->alarm_playing_idx].tune;
+            watch_buzzer_play_sequence((int8_t *)(movement_get_alarm_tune(_tune_to_play)), advanced_alarm_signal_callback);
         }
         // one time alarm? -> erase it
         if (state->alarm[state->alarm_playing_idx].day == ALARM_DAY_ONE_TIME) {
             state->alarm[state->alarm_playing_idx].day = ALARM_DAY_EACH_DAY;
             state->alarm[state->alarm_playing_idx].minute = state->alarm[state->alarm_playing_idx].hour = 0;
             state->alarm[state->alarm_playing_idx].beeps = 5;
-            state->alarm[state->alarm_playing_idx].pitch = 1;
+            state->alarm[state->alarm_playing_idx].tune = movement_get_alarm_tune_index();
             state->alarm[state->alarm_playing_idx].enabled = false;
             _alarm_update_alarm_enabled(state);
         }

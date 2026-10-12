@@ -111,6 +111,8 @@ movement_volatile_state_t movement_volatile_state;
 // The last sequence that we have been asked to play while the watch was in deep sleep
 static int8_t *_pending_sequence;
 
+uint8_t _alarm_tune_index = 0;
+
 // The note sequence of the default alarm
 int8_t alarm_tune[] = {
     BUZZER_NOTE_C8, 3,
@@ -617,6 +619,27 @@ void movement_play_signal(void) {
 
 void movement_play_alarm(void) {
     movement_play_sequence(alarm_tune, BUZZER_PRIORITY_ALARM);
+}
+
+void movement_play_alarm_tune(void) {
+    movement_play_sequence(tunes_table[_alarm_tune_index], BUZZER_PRIORITY_ALARM);
+}
+
+void movement_set_alarm_tune_index(uint8_t new_alarm_tune_index) {
+    _alarm_tune_index = new_alarm_tune_index;
+}
+
+uint8_t movement_get_alarm_tune_index() {
+    return _alarm_tune_index;   
+}
+
+//when index = -1: use tune index set by movement_set_alarm_tune_index (called in settings)
+int8_t* movement_get_alarm_tune(int index) {
+    return tunes_table[index == -1 ? _alarm_tune_index : index];   
+}
+
+int movement_get_num_alarm_tunes() {
+    return sizeof(tunes_table) / sizeof(tunes_table[0]);
 }
 
 void movement_play_alarm_beeps(uint8_t rounds, watch_buzzer_note_t alarm_note) {
