@@ -633,8 +633,9 @@ uint8_t movement_get_alarm_tune_index() {
     return _alarm_tune_index;   
 }
 
-int8_t* movement_get_alarm_tune() {
-    return tunes_table[_alarm_tune_index];   
+//when index = -1: use tune index set by movement_set_alarm_tune_index (called in settings)
+int8_t* movement_get_alarm_tune(int index) {
+    return tunes_table[index == -1 ? _alarm_tune_index : index];   
 }
 
 int movement_get_num_alarm_tunes() {
