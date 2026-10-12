@@ -230,7 +230,7 @@ static void _alarm_indicate_beep(alarm_state_t *state) {
         _alarm_play_short_beep(state->alarm[state->alarm_idx].pitch);
     } else {
         // regular alarm beep
-        movement_play_alarm_beeps(1, _buzzer_notes[state->alarm[state->alarm_idx].pitch]);
+        watch_buzzer_play_sequence((int8_t *)(movement_get_alarm_tune()), NULL);
     }
 }
 
