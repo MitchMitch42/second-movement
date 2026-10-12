@@ -26,6 +26,9 @@
 
 static const int8_t DEFAULT_NOTE_DURATION = 4;
 
+//timer_face default beep
+static const int8_t _sound_seq_beep[] = {BUZZER_NOTE_C8, 3, BUZZER_NOTE_REST, 3, -2, 2, BUZZER_NOTE_C8, 5, BUZZER_NOTE_REST, 25, 0};
+
 #ifdef SIGNAL_TUNE_DEFAULT
 int8_t signal_tune[] = {
     BUZZER_NOTE_C8, 5,
@@ -34,9 +37,6 @@ int8_t signal_tune[] = {
     0
 };
 #endif // SIGNAL_TUNE_DEFAULT
-
-//timer_face default beep
-static const int8_t _sound_seq_beep[] = {BUZZER_NOTE_C8, 3, BUZZER_NOTE_REST, 3, -2, 2, BUZZER_NOTE_C8, 5, BUZZER_NOTE_REST, 25, 0};
 
 static const int8_t tune_zelda_secret[] =
 {
