@@ -51,6 +51,15 @@ static uint8_t _buzzer_segdata[3][2] = {{0, 3}, {1, 3}, {2, 2}};
 
 static int8_t _wait_ticks;
 
+static uint8_t _beeps_to_play;    // temporary counter for ring signals playing
+
+static void advanced_alarm_signal_callback() {
+    if (_beeps_to_play) {
+        _beeps_to_play--;
+        watch_buzzer_play_sequence((int8_t *)(movement_get_alarm_tune()), advanced_alarm_signal_callback);
+    }
+}
+
 static uint8_t _get_weekday_idx(watch_date_time_t date_time) {
     date_time.unit.year += 20;
     if (date_time.unit.month <= 2) {
@@ -447,8 +456,8 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
             _alarm_play_short_beep(state->alarm[state->alarm_playing_idx].pitch);
         } else {
             // regular alarm beeps
-            movement_play_alarm_beeps((state->alarm[state->alarm_playing_idx].beeps == (ALARM_MAX_BEEP_ROUNDS - 1) ? 20 : state->alarm[state->alarm_playing_idx].beeps), 
-                                  _buzzer_notes[state->alarm[state->alarm_playing_idx].pitch]);
+            _beeps_to_play = state->alarm[state->alarm_playing_idx].beeps == (ALARM_MAX_BEEP_ROUNDS - 1) ? 20 : state->alarm[state->alarm_playing_idx].beeps;
+            watch_buzzer_play_sequence((int8_t *)(movement_get_alarm_tune()), advanced_alarm_signal_callback);
         }
         // one time alarm? -> erase it
         if (state->alarm[state->alarm_playing_idx].day == ALARM_DAY_ONE_TIME) {
