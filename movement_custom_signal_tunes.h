@@ -26,26 +26,17 @@
 
 static const int8_t DEFAULT_NOTE_DURATION = 4;
 
-static const int8_t alarm_tune_default[] = {
-    BUZZER_NOTE_C8, 3,
-    BUZZER_NOTE_REST, 4,
-    BUZZER_NOTE_C8, 3,
-    BUZZER_NOTE_REST, 4,
-    BUZZER_NOTE_C8, 3,
-    BUZZER_NOTE_REST, 4,
-    BUZZER_NOTE_C8, 5,
-    BUZZER_NOTE_REST, 38,
-    -8, 9,
-    0
-};
-
-static const int8_t signal_tune_default[] =
-{
+#ifdef SIGNAL_TUNE_DEFAULT
+int8_t signal_tune[] = {
     BUZZER_NOTE_C8, 5,
     BUZZER_NOTE_REST, 6,
     BUZZER_NOTE_C8, 5,
     0
 };
+#endif // SIGNAL_TUNE_DEFAULT
+
+//timer_face default beep
+static const int8_t _sound_seq_beep[] = {BUZZER_NOTE_C8, 3, BUZZER_NOTE_REST, 3, -2, 2, BUZZER_NOTE_C8, 5, BUZZER_NOTE_REST, 25, 0};
 
 static const int8_t tune_zelda_secret[] =
 {
@@ -5602,7 +5593,7 @@ static const int8_t alarm_tune_lease[] = {
 
 static const int8_t* tunes_table[] =
 {
-    alarm_tune_default, //rename to tune_alarm_default
+    _sound_seq_beep,
     tune_zelda_secret,
     tune_mario_theme,
     tune_mgs_codec,
@@ -5751,5 +5742,3 @@ static const char* tunesnamestable[] =
     "dkisla",
     "lease ",
 };
-
-static int8_t* signal_tune = signal_tune_default;

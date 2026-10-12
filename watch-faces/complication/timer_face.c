@@ -33,7 +33,6 @@ static const uint32_t _default_timer_values[] = {0x0, 0x000300, 0x000500, 0x000A
 static int8_t _wait_ticks = -1;
 
 // sound sequence for a single beeping sequence
-static const int8_t _sound_seq_beep[] = {BUZZER_NOTE_C8, 3, BUZZER_NOTE_REST, 3, -2, 2, BUZZER_NOTE_C8, 5, BUZZER_NOTE_REST, 25, 0};
 static const int8_t _sound_seq_start[] = {BUZZER_NOTE_C8, 2, 0};
 
 static uint8_t _beeps_to_play;    // temporary counter for ring signals playing
