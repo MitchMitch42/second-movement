@@ -283,6 +283,14 @@ void advanced_alarm_face_resign(void *context) {
     state->alarm_quick_ticks = false;
     _wait_ticks = -1;
     movement_request_tick_frequency(1);
+
+    watch_date_time_t now = movement_get_local_date_time();
+    state->alarm[0].day = 7;
+    state->alarm[0].hour = now.unit.hour;
+    state->alarm[0].minute = now.unit.minute;
+    state->alarm[0].pitch = 0;
+    state->alarm[0].beeps = 5;
+    state->alarm[0].enabled = true;
 }
 
 movement_watch_face_advisory_t advanced_alarm_face_advise(void *context) {
