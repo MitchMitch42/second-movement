@@ -125,6 +125,8 @@ static void tune_setting_display(uint8_t subsecond) {
     if (subsecond % 2) {
         sprintf(buf, "%2d", movement_get_alarm_tune_index());
         watch_display_text(WATCH_POSITION_TOP_RIGHT, buf);
+    } else {
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
     }
 }
 
