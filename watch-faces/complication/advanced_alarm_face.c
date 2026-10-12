@@ -262,13 +262,13 @@ void advanced_alarm_face_setup(uint8_t watch_face_index, void **context_ptr) {
             state->alarm[i].tune = 0;
         }
 
-        watch_date_time_t now = movement_get_local_date_time();
-        state->alarm[0].day = 7;
-        state->alarm[0].hour = now.unit.minute == 59  && now.unit.hour == 23 ? 0 : now.unit.minute == 59 ? now.unit.hour + 1 : now.unit.hour;
-        state->alarm[0].minute = now.unit.minute == 59 ? 0 : now.unit.minute + 1;
-        state->alarm[0].tune = 0;
-        state->alarm[0].beeps = 5;
-        state->alarm[0].enabled = true;
+        // watch_date_time_t now = movement_get_local_date_time();
+        // state->alarm[0].day = 7;
+        // state->alarm[0].hour = now.unit.minute == 59  && now.unit.hour == 23 ? 0 : now.unit.minute == 59 ? now.unit.hour + 1 : now.unit.hour;
+        // state->alarm[0].minute = now.unit.minute == 59 ? 0 : now.unit.minute + 1;
+        // state->alarm[0].tune = 0;
+        // state->alarm[0].beeps = 5;
+        // state->alarm[0].enabled = true;
 
         state->alarm_handled_minute = -1;
         _wait_ticks = -1;
@@ -479,7 +479,7 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
             state->alarm[state->alarm_playing_idx].day = ALARM_DAY_EACH_DAY;
             state->alarm[state->alarm_playing_idx].minute = state->alarm[state->alarm_playing_idx].hour = 0;
             state->alarm[state->alarm_playing_idx].beeps = 5;
-            state->alarm[state->alarm_playing_idx].tune = 0;
+            state->alarm[state->alarm_playing_idx].tune = movement_get_alarm_tune_index();
             state->alarm[state->alarm_playing_idx].enabled = false;
             _alarm_update_alarm_enabled(state);
         }
