@@ -32,14 +32,9 @@ typedef enum {
 int8_t workout_double_beep[] = {BUZZER_NOTE_C8, 4, BUZZER_NOTE_REST, 5, BUZZER_NOTE_C8, 5, 0};
 
 int8_t workout_tune_start[] = {
-    BUZZER_NOTE_G5, 8,
-    BUZZER_NOTE_F5SHARP_G5FLAT, 8,
-    BUZZER_NOTE_D5SHARP_E5FLAT, 8,
-    BUZZER_NOTE_A4, 8,
-    BUZZER_NOTE_G4SHARP_A4FLAT, 8,
-    BUZZER_NOTE_E5, 8,
-    BUZZER_NOTE_G5SHARP_A5FLAT, 8,
-    BUZZER_NOTE_C6, 20,
+    BUZZER_NOTE_C6, 4,
+    BUZZER_NOTE_C7, 8,
+    BUZZER_NOTE_REST, 4,
     0
 };
 
