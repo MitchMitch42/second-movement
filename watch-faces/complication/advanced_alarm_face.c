@@ -354,6 +354,8 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
                         state->alarm[state->alarm_idx].hour = (state->alarm[state->alarm_idx].hour + 1) % 24;
             } else if (state->setting_state == alarm_setting_idx_minute) {
                         state->alarm[state->alarm_idx].minute = (state->alarm[state->alarm_idx].minute + 1) % 60;
+            } else if (state->setting_state == alarm_setting_idx_tune) {
+                        state->alarm[state->alarm_idx].tune = (state->alarm[state->alarm_idx].tune + 1) % movement_get_num_alarm_tunes();  
             } else _abort_quick_ticks(state);
         } else if (!state->is_setting) {
             if (_wait_ticks >= 0) _wait_ticks++;
@@ -422,6 +424,7 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
                 break;
             case alarm_setting_idx_tune:
                 // tune selection
+                _abort_quick_ticks(state);
                 state->alarm[state->alarm_idx].tune = (state->alarm[state->alarm_idx].tune + 1) % movement_get_num_alarm_tunes();    
                 state->alarm[state->alarm_idx].initialized = true;
                 // play sound to show user what this is for
@@ -454,9 +457,11 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
                 // alarm selection
                 state->alarm_idx = 0;
                 break;
+            case alarm_setting_idx_tune:
+                state->alarm[state->alarm_idx].initialized = true;
             case alarm_setting_idx_minute:
             case alarm_setting_idx_hour:
-                // initiate fast cycling for hour or minute settings
+                // initiate fast cycling for hour or minute or tune settings
                 movement_request_tick_frequency(8);
                 state->alarm_quick_ticks = true;
                 break;
@@ -468,7 +473,7 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
         break;
     case EVENT_ALARM_LONG_UP:
         if (state->is_setting) {
-            if (state->setting_state == alarm_setting_idx_hour || state->setting_state == alarm_setting_idx_minute)
+            if (state->setting_state == alarm_setting_idx_hour || state->setting_state == alarm_setting_idx_minute || state->setting_state == alarm_setting_idx_tune)
                 _abort_quick_ticks(state);
         } else _wait_ticks = -1;
         break;
