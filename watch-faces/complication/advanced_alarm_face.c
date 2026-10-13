@@ -260,7 +260,6 @@ void advanced_alarm_face_setup(uint8_t watch_face_index, void **context_ptr) {
             state->alarm[i].day = ALARM_DAY_EACH_DAY;
             state->alarm[i].beeps = 5;
             state->alarm[i].tune = 0;
-            state->alarm[i].initialized = false;
         }
 
         // watch_date_time_t now = movement_get_local_date_time();
@@ -288,13 +287,6 @@ void advanced_alarm_face_setup(uint8_t watch_face_index, void **context_ptr) {
 void advanced_alarm_face_activate(void *context) {
     (void) context;
     watch_set_colon();
-
-    // initialize the default alarm tune
-    for (uint8_t i = 0; i < ALARM_ALARMS; i++) {
-        if(!((alarm_state_t *)context)->alarm[i].initialized) {
-            ((alarm_state_t *)context)->alarm[i].tune = movement_get_alarm_tune_index();
-        }
-    }
 }
 
 void advanced_alarm_face_resign(void *context) {
@@ -426,7 +418,6 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
                 // tune selection
                 _abort_quick_ticks(state);
                 state->alarm[state->alarm_idx].tune = (state->alarm[state->alarm_idx].tune + 1) % movement_get_num_alarm_tunes();    
-                state->alarm[state->alarm_idx].initialized = true;
                 // play sound to show user what this is for
                 _alarm_indicate_beep(state);
                 break;
@@ -458,7 +449,6 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
                 state->alarm_idx = 0;
                 break;
             case alarm_setting_idx_tune:
-                state->alarm[state->alarm_idx].initialized = true;
             case alarm_setting_idx_minute:
             case alarm_setting_idx_hour:
                 // initiate fast cycling for hour or minute or tune settings
@@ -493,7 +483,7 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
             state->alarm[state->alarm_playing_idx].day = ALARM_DAY_EACH_DAY;
             state->alarm[state->alarm_playing_idx].minute = state->alarm[state->alarm_playing_idx].hour = 0;
             state->alarm[state->alarm_playing_idx].beeps = 5;
-            state->alarm[state->alarm_playing_idx].tune = movement_get_alarm_tune_index();
+            state->alarm[state->alarm_playing_idx].tune = 0;
             state->alarm[state->alarm_playing_idx].enabled = false;
             _alarm_update_alarm_enabled(state);
         }
