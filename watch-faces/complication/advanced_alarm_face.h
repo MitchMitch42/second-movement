@@ -70,8 +70,9 @@ typedef struct {
     uint8_t hour : 5;
     uint8_t minute : 6;
     uint8_t beeps : 4;
-    uint8_t pitch :2;
+    uint8_t tune : 7;
     bool enabled : 1;
+    bool initialized : 1; // used to indicate if the alarm slot has been used by the user or is still in its default state
 } alarm_setting_t;
 
 typedef struct {
