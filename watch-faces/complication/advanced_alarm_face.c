@@ -463,6 +463,10 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
         break;
     case EVENT_ALARM_LONG_UP:
         if (state->is_setting) {
+            if(state->setting_state == alarm_setting_idx_tune) {
+                // play sound to show user what this is for
+                _alarm_indicate_beep(state);
+            }
             if (state->setting_state == alarm_setting_idx_hour || state->setting_state == alarm_setting_idx_minute || state->setting_state == alarm_setting_idx_tune)
                 _abort_quick_ticks(state);
         } else _wait_ticks = -1;
