@@ -528,9 +528,16 @@ bool movement_default_loop_handler(movement_event_t event) {
                 movement_move_to_face(0);
             }
             break;
-        case EVENT_ALARM_BUTTON_UP:
-            if (MOVEMENT_TERTIARY_FACE_INDEX && movement_state.current_face_idx == 0) {
+        case EVENT_MODE_REALLY_LONG_PRESS:
+            if (MOVEMENT_TERTIARY_FACE_INDEX && movement_state.current_face_idx == MOVEMENT_SECONDARY_FACE_INDEX) {
                 movement_move_to_face(MOVEMENT_TERTIARY_FACE_INDEX);
+            }
+            break;
+        case EVENT_ALARM_LONG_PRESS:
+            if (MOVEMENT_QUATERNARY_FACE_INDEX && movement_state.current_face_idx == 0) {
+                movement_move_to_face(MOVEMENT_QUATERNARY_FACE_INDEX);
+            } else if(MOVEMENT_QUATERNARY_FACE_INDEX && movement_state.current_face_idx == MOVEMENT_QUATERNARY_FACE_INDEX) {
+                movement_move_to_face(0);
             }
             break; 
         default:
@@ -549,6 +556,7 @@ void movement_move_to_next_face(void) {
     uint16_t face_max =
         (movement_state.current_face_idx < (int16_t)MOVEMENT_SECONDARY_FACE_INDEX) ? MOVEMENT_SECONDARY_FACE_INDEX : 
         (movement_state.current_face_idx < (int16_t)MOVEMENT_TERTIARY_FACE_INDEX) ? MOVEMENT_TERTIARY_FACE_INDEX : 
+        (movement_state.current_face_idx < (int16_t)MOVEMENT_QUATERNARY_FACE_INDEX) ? MOVEMENT_QUATERNARY_FACE_INDEX : 
         MOVEMENT_NUM_FACES;  
     movement_move_to_face((movement_state.current_face_idx + 1) % face_max);
 }
