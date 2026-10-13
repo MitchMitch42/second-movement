@@ -136,7 +136,7 @@ static void _advanced_alarm_face_draw(alarm_state_t *state, uint8_t subsecond) {
     if (state->is_setting) {
         watch_display_text(WATCH_POSITION_SECONDS, "  ");
         // draw tune indicator
-        if ((subsecond % 2) == 0 || (state->setting_state != alarm_setting_idx_tune)) {
+        if (((subsecond % 2) == 0 || state->alarm_quick_ticks) || (state->setting_state != alarm_setting_idx_tune)) {
             if(state->alarm[state->alarm_idx].tune == movement_get_num_alarm_tunes()) {
                 watch_display_text(WATCH_POSITION_SECONDS, "AU");
             } else {
