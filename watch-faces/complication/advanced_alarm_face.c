@@ -53,6 +53,8 @@ static int8_t _wait_ticks;
 static uint8_t _beeps_to_play;    // temporary counter for ring signals playing
 static uint8_t _tune_to_play;     // temporary index of the tune to play
 
+static bool _tune_selection_enabled;
+
 static void advanced_alarm_signal_callback() {
     if (_beeps_to_play) {
         _beeps_to_play--;
@@ -352,11 +354,16 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
         if (state->alarm_quick_ticks) {
             // we are in fast cycling mode
             if (state->setting_state == alarm_setting_idx_hour) {
-                        state->alarm[state->alarm_idx].hour = (state->alarm[state->alarm_idx].hour + 1) % 24;
+                state->alarm[state->alarm_idx].hour = (state->alarm[state->alarm_idx].hour + 1) % 24;
             } else if (state->setting_state == alarm_setting_idx_minute) {
-                        state->alarm[state->alarm_idx].minute = (state->alarm[state->alarm_idx].minute + 1) % 60;
+                state->alarm[state->alarm_idx].minute = (state->alarm[state->alarm_idx].minute + 1) % 60;
             } else if (state->setting_state == alarm_setting_idx_tune) {
-                        state->alarm[state->alarm_idx].tune = (state->alarm[state->alarm_idx].tune + 1) % (movement_get_num_alarm_tunes() + 1);  
+                if(tune_selection_enabled) {
+                    state->alarm[state->alarm_idx].tune = (state->alarm[state->alarm_idx].tune + 1) % (movement_get_num_alarm_tunes() + 1);  
+                    if (state->alarm[state->alarm_idx].tune == movement_get_num_alarm_tunes()) {
+                        tune_selection_enabled = false; //stop when user reached end
+                    }
+                }
             } else _abort_quick_ticks(state);
         } else if (!state->is_setting) {
             if (_wait_ticks >= 0) _wait_ticks++;
@@ -395,6 +402,9 @@ bool advanced_alarm_face_loop(movement_event_t event, void *context) {
         } else {
             _alarm_initiate_setting(state, event.subsecond);
         }
+        break;
+    case EVENT_ALARM_BUTTON_DOWN:
+        tune_selection_enabled = true;
         break;
     case EVENT_ALARM_BUTTON_UP:
         if (!state->is_setting) {
