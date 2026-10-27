@@ -42,7 +42,6 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
 
         state->light_level_border = 65200; 
         state->frequency = 8;
-        state->frequency_rising_edge = 8;
     }
 }
 
@@ -153,7 +152,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     watch_display_text(WATCH_POSITION_BOTTOM, buf);
                     break;            
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:        
-                    // watch is polling sensor with increased frequency, waiting for a rising edge (dark -> bright)
+                    // watch is polling sensor, waiting for a rising edge (dark -> bright)
                     watch_display_string("    ", 2); 
                     watch_display_string("i", 2);                  
                     watch_display_string("i", 3);
@@ -166,7 +165,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                         state->bits_received = 0;
                         state->data = 0;
                         state->mode = BLINK_RECEIVER_MODE_RECORD;
-                        movement_request_tick_frequency(state->frequency); //switch back to normal frequency for receiving the data
                     }
                     break;
                 case BLINK_RECEIVER_MODE_RECORD:     
@@ -217,7 +215,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     // start listening
                     //watch_buzzer_play_note(BUZZER_NOTE_E5, 100);
                     state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
-                    movement_request_tick_frequency(state->frequency_rising_edge); //increase frequency to make sure that the first rising edge is detected as fast as possible
                     watch_display_string("        ", 2);
                     watch_clear_colon();
                     break;
@@ -226,20 +223,12 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     // interrupt listening
                     //watch_buzzer_play_note(BUZZER_NOTE_E4, 200);
                     state->mode = BLINK_RECEIVER_MODE_IDLE;
-                    movement_request_tick_frequency(state->frequency); //switch back to normal frequency
                     break;
                 default:
                     break;
             }
             break;
         case EVENT_ALARM_LONG_PRESS:
-            //change frequency_rising_edge (1 Hz - 64 Hz)
-            state->frequency_rising_edge *= 2;
-            if (state->frequency_rising_edge > 64)
-                state->frequency_rising_edge = 1;
-            char outputString4[3];
-            snprintf(outputString4, 3, "%2d", state->frequency_rising_edge);
-            watch_display_string(outputString4, 2);
             break;
         case EVENT_LIGHT_LONG_PRESS:
             //change frequency (1 Hz - 32 Hz)
