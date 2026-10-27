@@ -114,18 +114,6 @@ void blink_receiver_handle_dateset(blink_receiver_state_t *state)
     movement_set_local_date_time(date_time);
 }
 
-void blink_receiver_handle_totp(blink_receiver_state_t *state) { 
-    watch_display_text(WATCH_POSITION_BOTTOM, "TOTP  "); 
-    // char[]
-    // for (int i = 0; i < 5; i++) {
-    //     uint8_t first = state->packets[i] >> 8 & 0x6;
-    // }
-}
-
-void blink_receiver_handle_packet(blink_receiver_state_t *state, uint8_t header) { 
-    state->packets[header - 8] = state->data;
-}
-
 // Handle the received 4 bytes. First 3 bytes are data, last byte is checksum. 
 void blink_receiver_handle_data(blink_receiver_state_t *state) {
     uint8_t checksum = blink_receiver_calculate_checksum(state->data >> 24 & 0xFF, state->data >> 16 & 0xFF, state->data >> 8 & 0xFF);
@@ -134,17 +122,9 @@ void blink_receiver_handle_data(blink_receiver_state_t *state) {
         if (header == 1) blink_receiver_handle_timeset(state, false); // timestamp received
         else if (header == 2) blink_receiver_handle_dateset(state); // date received
         else if (header == 3) blink_receiver_handle_timeset(state, true); // exact timestamp received (ms == 0)
-        else if (header >= 8) {
-            blink_receiver_handle_packet(state, header); // data as part of multiple packets received
-            if (header == 15) { // last packet of TOTP received
-                if (state->packets[0] != 0xFFFFFFFF) blink_receiver_handle_totp(state); 
-                else watch_display_text(WATCH_POSITION_BOTTOM, "FAIL"); //at least one packet had wrong crc
-            }
-        }
         else watch_display_text(WATCH_POSITION_TOP_LEFT, "__"); // unknown header
     } else {
         //wrong checksum
-        state->packets[0] = 0xFFFFFFFF; // invalidate packets 
         char outputString[3];
         snprintf(outputString, 3, "%02x", checksum);
         watch_display_text(WATCH_POSITION_TOP_LEFT, outputString);
@@ -180,11 +160,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());      
                     watch_display_string("i", 4);                  
                     watch_display_string("i", 5);
-
-                    char outputStringXXX[3];
-                    snprintf(outputStringXXX, 3, "%02d", state->pollCnt);
-                    state->pollCnt++;
-                    watch_display_string(outputStringXXX, 6);
 
                     if (state->light_level < state->light_level_border) { //rising edge detected: transmission has started
                         //watch_buzzer_play_note(BUZZER_NOTE_E6, 100);  
@@ -245,7 +220,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     movement_request_tick_frequency(state->frequency_rising_edge); //increase frequency to make sure that the first rising edge is detected as fast as possible
                     watch_display_string("        ", 2);
                     watch_clear_colon();
-                    state->pollCnt = 0;
                     break;
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:
                 case BLINK_RECEIVER_MODE_RECORD:

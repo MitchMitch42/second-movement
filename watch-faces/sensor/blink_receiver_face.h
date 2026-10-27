@@ -49,8 +49,6 @@ typedef struct {
     int16_t bits_received;  
     uint16_t light_level; 
     blink_receiver_mode mode; 
-    uint16_t pollCnt;
-    uint32_t packets[6];
     uint8_t tick_cnt;
     uint32_t last_second;
 } blink_receiver_state_t;
