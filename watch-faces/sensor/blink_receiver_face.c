@@ -48,12 +48,6 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
 
 void blink_receiver_face_activate(void *context) {
     (void) context;
-    HAL_GPIO_IR_ENABLE_out();
-    HAL_GPIO_IR_ENABLE_clr();
-    HAL_GPIO_IRSENSE_pmuxen(HAL_GPIO_PMUX_ADC);
-    adc_init();
-    adc_enable();
-
     blink_receiver_state_t *state = (blink_receiver_state_t *)context;
     movement_request_tick_frequency(state->frequency);
 }
@@ -151,6 +145,21 @@ void blink_receiver_handle_data(blink_receiver_state_t *state) {
     }
 }
 
+uint16_t blink_receiver_read_sensor(void) {
+    HAL_GPIO_IR_ENABLE_out();
+    HAL_GPIO_IR_ENABLE_clr();
+    HAL_GPIO_IRSENSE_pmuxen(HAL_GPIO_PMUX_ADC);
+    adc_init();
+    adc_enable();
+    uint16_t val = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());
+    adc_disable();
+    HAL_GPIO_IRSENSE_pmuxdis();
+    HAL_GPIO_IRSENSE_off();
+    HAL_GPIO_IR_ENABLE_off();
+    return val;
+}
+
+
 bool blink_receiver_face_loop(movement_event_t event, void *context) {
     blink_receiver_state_t *state = (blink_receiver_state_t *)context;
 
@@ -167,7 +176,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             switch (state->mode) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
                     // starting state: show current light value
-                    state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());
+                    state->light_level = blink_receiver_read_sensor();
                     char buf[7];
                     snprintf(buf, 7, "%-6d", state->light_level);
                     watch_display_text(WATCH_POSITION_BOTTOM, buf);
@@ -177,7 +186,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     watch_display_string("    ", 2); 
                     watch_display_string("i", 2);                  
                     watch_display_string("i", 3);
-                    state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());      
+                    state->light_level = blink_receiver_read_sensor();      
                     watch_display_string("i", 4);                  
                     watch_display_string("i", 5);
 
@@ -199,7 +208,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                         watch_display_string("    ", 2); 
                         watch_display_string("o", 2);                  
                         watch_display_string("o", 3);
-                        state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());           
+                        state->light_level = blink_receiver_read_sensor();           
                         watch_display_string("o", 4);                  
                         watch_display_string("o", 5);               
                         char outputStringXX[3];
@@ -303,11 +312,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
 
 void blink_receiver_face_resign(void *context) {
     (void) context;
-
-    adc_disable();
-    HAL_GPIO_IRSENSE_pmuxdis();
-    HAL_GPIO_IRSENSE_off();
-    HAL_GPIO_IR_ENABLE_off();
 }
 
 //#endif // HAS_IR_SENSOR
