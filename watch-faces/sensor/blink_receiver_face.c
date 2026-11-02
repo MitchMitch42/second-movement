@@ -146,9 +146,13 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
             state->samples[samples_received] = bright;
             samples_received++;
 
+            if(state->samples_received <= 8) {
+                watch_display_string(state->samples[samples_received - 1] ? "1" : "0", samples_received + 1);
+            }
+
             if (samples_received == state->samples_per_bit) {
                 samples_received = 0;
-                if (blink_receiver_summarize_samples(state)) { //rising edge detected: transmission has started
+                if (blink_receiver_summarize_samples(state)) { //enough bright samples detected: transmission has started
                     state->bits_received = 0;
                     state->data = 0;
                     state->mode = BLINK_RECEIVER_MODE_RECORD;
@@ -157,7 +161,8 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
         }
     } else { //start signal received: record the next 32 bit (32*samples_per_bit samples)
         state->samples[samples_received] = bright;
-        samples_received++;       
+        samples_received++;   
+
         if (samples_received == state->samples_per_bit) {
             samples_received = 0;
             state->data = state->data << 1;
@@ -231,9 +236,9 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 case BLINK_RECEIVER_MODE_IDLE:
                     // start listening
                     //watch_buzzer_play_note(BUZZER_NOTE_E5, 100);
+                    state->samples_received = 0;
                     state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
                     watch_display_string("        ", 2);
-                    watch_clear_colon();
                     break;
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:
                 case BLINK_RECEIVER_MODE_RECORD:
@@ -251,7 +256,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             if (state->frequency > MAX_FREQUENCY)
                 state->frequency = 1;
             char outputString3[3];
-            snprintf(outputString3, 3, "%2d", state->frequency);
+            snprintf(outputString3, 3, "%02d", state->frequency);
             watch_display_string(outputString3, 2);
             movement_request_tick_frequency(state->frequency);
             state->last_second = 62;
@@ -263,7 +268,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             if (state->samples_per_bit > MAX_SAMPLES_PER_BIT)
                 state->samples_per_bit = 1;
             char outputString3[3];
-            snprintf(outputString3, 3, "%2d", samples_per_bit);
+            snprintf(outputString3, 3, "%02d", samples_per_bit);
             watch_display_string(outputString3, 2);
             state->mode = BLINK_RECEIVER_MODE_IDLE;
             break;
