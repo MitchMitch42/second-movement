@@ -43,13 +43,15 @@ typedef enum {
 
 typedef struct {
     uint16_t light_level_border;
-    uint8_t frequency;
+    uint8_t samples_per_bit;
     uint32_t data;
     int16_t bits_received;  
-    uint16_t light_level; 
     blink_receiver_mode mode; 
     uint8_t tick_cnt;
     uint32_t last_second;
+
+    bool *samples;           
+    uint8_t samples_received; 
 } blink_receiver_state_t;
 
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr);
