@@ -43,6 +43,7 @@ typedef enum {
 
 typedef struct {
     uint16_t light_level_border;
+    uint8_t frequency;
     uint8_t samples_per_bit;
     uint32_t data;
     int16_t bits_received;  

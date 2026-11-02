@@ -35,8 +35,9 @@
 
 #define DEFAULT_LIGHT_LEVEL_BORDER 65200
 #define DEFAULT_SAMPLES_PER_BIT 8
+#define DEFAULT_FREQUENCY 64 
 #define MAX_SAMPLES_PER_BIT 16
-#define BLINK_RECEIVER_FREQUENCY 64 
+#define MAX_FREQUENCY 64
 
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
     (void) watch_face_index;
@@ -48,6 +49,7 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         state->samples = malloc(MAX_SAMPLES_PER_BIT * sizeof(bool));
         state->light_level_border = DEFAULT_LIGHT_LEVEL_BORDER; 
         state->samples_per_bit = DEFAULT_SAMPLES_PER_BIT;
+        state->frequency = DEFAULT_FREQUENCY;
     }
 }
 
@@ -60,7 +62,7 @@ void blink_receiver_face_activate(void *context) {
     adc_enable();
 
     blink_receiver_state_t *state = (blink_receiver_state_t *)context;
-    movement_request_tick_frequency(BLINK_RECEIVER_FREQUENCY);
+    movement_request_tick_frequency(state->frequency);
 }
 
 uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_t data_3)
@@ -81,7 +83,7 @@ void blink_receiver_handle_timeset(blink_receiver_state_t *state, bool exact)
     date_time.unit.minute = state->data >> 16 & 0b111111;
     date_time.unit.hour = state->data >> 11 & 0b11111;
 
-    if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)state->tick_cnt * 1000.0) / (double)BLINK_RECEIVER_FREQUENCY) + 0.5));
+    if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)state->tick_cnt * 1000.0) / (double)state->frequency) + 0.5));
     else movement_set_local_date_time(date_time);
 
     char outputString2[3];
@@ -194,7 +196,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             state->mode = BLINK_RECEIVER_MODE_CALC;         
             break;
         case EVENT_TICK:
-            state->tick_cnt = (state->tick_cnt + 1) % BLINK_RECEIVER_FREQUENCY;        
+            state->tick_cnt = (state->tick_cnt + 1) % state->frequency;        
             switch (state->mode) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
                     // starting state: show current light value
@@ -222,7 +224,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     break;
             }
             break;
-        case EVENT_ALARM_BUTTON_DOWN:
+        case EVENT_ALARM_BUTTON_UP:
             // Start or interrupt listening to incoming transmission
             switch (state->mode) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
@@ -243,13 +245,25 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     break;
             }
             break;
+        case EVENT_ALARM_LONG_PRESS:
+            //change frequency (1 Hz - 64 Hz)
+            state->frequency *= 2;
+            if (state->frequency > MAX_FREQUENCY)
+                state->frequency = 1;
+            char outputString3[3];
+            snprintf(outputString3, 3, "%2d", state->frequency);
+            watch_display_string(outputString3, 2);
+            movement_request_tick_frequency(state->frequency);
+            state->last_second = 62;
+            state->mode = BLINK_RECEIVER_MODE_CALC;   
+            break;
         case EVENT_LIGHT_BUTTON_UP:
-            //changes samples_per_bit (1 to 16), which is shown as frequency (64 Hz to 4 Hz) -> frequency = BLINK_RECEIVER_FREQUENCY / samples_per_bit
+            //changes samples_per_bit (1 to 16)
             state->samples_per_bit *= 2;
-            if (state->samples_per_bit > 16)
+            if (state->samples_per_bit > MAX_SAMPLES_PER_BIT)
                 state->samples_per_bit = 1;
             char outputString3[3];
-            snprintf(outputString3, 3, "%2d", BLINK_RECEIVER_FREQUENCY/state->samples_per_bit);
+            snprintf(outputString3, 3, "%2d", samples_per_bit);
             watch_display_string(outputString3, 2);
             state->mode = BLINK_RECEIVER_MODE_IDLE;
             break;
