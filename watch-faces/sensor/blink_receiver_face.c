@@ -106,14 +106,6 @@ void blink_receiver_handle_timeset(bool exact, uint32_t data, uint8_t tick_cnt, 
     watch_set_colon();
 }
 
-//set local date to received date and set local time to received timestamp
-void blink_receiver_handle_datetimeset(bool exact, uint32_t data1, uint32_t data2, uint8_t tick_cnt, uint8_t frequency)
-{
-    blink_receiver_handle_timeset(exact, data2, tick_cnt, frequency);
-    blink_receiver_handle_dateset(data1);
-    watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "AE" : "AI");
-}
-
 //set local date to received date
 void blink_receiver_handle_dateset(uint32_t data)
 {
@@ -137,6 +129,14 @@ void blink_receiver_handle_dateset(uint32_t data)
     date_time.unit.month = data >> 19 & 0b1111;
     date_time.unit.year = data >> 13 & 0b111111; //todo?
     movement_set_local_date_time(date_time);
+}
+
+//set local date to received date and set local time to received timestamp
+void blink_receiver_handle_datetimeset(bool exact, uint32_t data1, uint32_t data2, uint8_t tick_cnt, uint8_t frequency)
+{
+    blink_receiver_handle_timeset(exact, data2, tick_cnt, frequency);
+    blink_receiver_handle_dateset(data1);
+    watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "AE" : "AI");
 }
 
 // Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
@@ -180,20 +180,30 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data) {
     return false;
 }
 
+bool blink_receiver_summarize_samples(blink_receiver_state_t *state) {
+    uint8_t bright_sample_count = 0;
+    for (int i = 0; i < state->samples_per_bit; i++) {
+        if (state->samples[i]) {
+            bright_sample_count++;
+        }
+    }
+    return bright_sample_count >= (state->samples_per_bit / 2);
+}
+
 void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state) {
-    bool bright = adc_get_analog_value(HAL_GPIO_IRSENSE_pin() < state->light_level_border;
+    bool bright = adc_get_analog_value(HAL_GPIO_IRSENSE_pin()) < state->light_level_border;
 
     if (waiting_for_start) { //waiting for start signal
         if (state->samples_received > 0 || bright) { //only record samples if at least one bright sample has been received
-            state->samples[samples_received] = bright;
-            samples_received++;
+            state->samples[state->samples_received] = bright;
+            state->samples_received++;
 
             if(state->samples_received <= 8) {
-                watch_display_string(state->samples[samples_received - 1] ? "1" : "0", samples_received + 1);
+                watch_display_string(state->samples[state->samples_received - 1] ? "1" : "0", state->samples_received + 1);
             }
 
-            if (samples_received == state->samples_per_bit) {
-                samples_received = 0;
+            if (state->samples_received == state->samples_per_bit) {
+                state->samples_received = 0;
                 if (blink_receiver_summarize_samples(state)) { //enough bright samples detected: transmission has started
                     state->bits_received = 0;
                     state->current_package = 0;
@@ -205,21 +215,21 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
             }
         }
     } else { //start signal received: record the next 32 bit (32*samples_per_bit samples)
-        state->samples[samples_received] = bright;
-        samples_received++;   
+        state->samples[state->samples_received] = bright;
+        state->samples_received++;   
 
-        if (samples_received == state->samples_per_bit) {
-            samples_received = 0;
-            state->data[current_package] = state->data[current_package] << 1;
+        if (state->samples_received == state->samples_per_bit) {
+            state->samples_received = 0;
+            state->data[state->current_package] = state->data[state->current_package] << 1;
             if (blink_receiver_summarize_samples(state)) {         
-                state->data[current_package] += 1;              
+                state->data[state->current_package] += 1;              
             }
             state->bits_received++;
             if (state->bits_received == 32) { // transmission of 32bit package complete   
-                if(blink_receiver_handle_data(state, state->data[current_package])) {
+                if(blink_receiver_handle_data(state, state->data[state->current_package])) {
                     //another package is coming
                     state->bits_received = 0;
-                    current_package++;
+                    state->current_package++;
                 } else {
                     //transmission complete
                     state->mode = BLINK_RECEIVER_MODE_IDLE;   
@@ -229,19 +239,9 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
     }
 }
 
-bool blink_receiver_summarize_samples(blink_receiver_state_t *state) {
-    uint8_t bright_sample_count = 0;
-    for (int i = 0; i < state->samples_per_bit; i++) {
-        if (state->samples[i]) {
-            bring_sample_count++;
-        }
-    }
-    return bright_sample_count >= (state->samples_per_bit / 2);
-}
-
 bool blink_receiver_face_loop(movement_event_t event, void *context) {
     blink_receiver_state_t *state = (blink_receiver_state_t *)context;
-
+    char buf[7];
     switch (event.event_type) {
         case EVENT_NONE:
             break;
@@ -256,15 +256,15 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             switch (state->mode) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
                     // starting state: show current light value
-                    char buf[7];
-                    snprintf(buf, 7, "%-6d", adc_get_analog_value(HAL_GPIO_IRSENSE_pin());
+                    
+                    snprintf(buf, 7, "%-6d", adc_get_analog_value(HAL_GPIO_IRSENSE_pin()));
                     watch_display_text(WATCH_POSITION_BOTTOM, buf);
                     break;            
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:     
-                    blink_receiver_read_sample(true);
+                    blink_receiver_read_sample(true, state);
                     break;   
                 case BLINK_RECEIVER_MODE_RECORD:     
-                    blink_receiver_read_sample(false);
+                    blink_receiver_read_sample(false, state);
                     break;
                 case BLINK_RECEIVER_MODE_CALC:
                     watch_display_text(WATCH_POSITION_BOTTOM, "CALC"); 
@@ -306,9 +306,8 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             state->frequency *= 2;
             if (state->frequency > MAX_FREQUENCY)
                 state->frequency = 1;
-            char outputString3[3];
-            snprintf(outputString3, 3, "%02d", state->frequency);
-            watch_display_string(outputString3, 2);
+            snprintf(buf, 3, "%02d", state->frequency);
+            watch_display_string(buf, 2);
             movement_request_tick_frequency(state->frequency);
             state->last_second = 62;
             state->mode = BLINK_RECEIVER_MODE_CALC;   
@@ -318,9 +317,8 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             state->samples_per_bit *= 2;
             if (state->samples_per_bit > MAX_SAMPLES_PER_BIT)
                 state->samples_per_bit = 1;
-            char outputString3[3];
-            snprintf(outputString3, 3, "%02d", samples_per_bit);
-            watch_display_string(outputString3, 2);
+            snprintf(buf, 3, "%02d", state->samples_per_bit);
+            watch_display_string(buf, 2);
             state->mode = BLINK_RECEIVER_MODE_IDLE;
             break;
         case EVENT_LIGHT_LONG_PRESS:
@@ -328,10 +326,9 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             state->light_level_border += 10;
             if (state->light_level_border > 65500)
                 state->light_level_border = 65100;
-            char outputString6[6];
-            snprintf(outputString6, 6, "%5d", state->light_level_border);
+            snprintf(buf, 6, "%5d", state->light_level_border);
             watch_display_string("      ", 4);
-            watch_display_string(outputString6, 4);
+            watch_display_string(buf, 4);
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
             break; //do not illuminate led
