@@ -36,8 +36,17 @@
 #define DEFAULT_LIGHT_LEVEL_BORDER 65200
 #define DEFAULT_SAMPLES_PER_BIT 8
 #define DEFAULT_FREQUENCY 64 
+
 #define MAX_SAMPLES_PER_BIT 16
 #define MAX_FREQUENCY 64
+#define MAX_PACKAGE_COUNT 4
+
+#define BLINK_RECEIVER_HEADER_TIMESET 1
+#define BLINK_RECEIVER_HEADER_DATESET 2
+#define BLINK_RECEIVER_HEADER_TIMESET_EXACT 3
+#define BLINK_RECEIVER_HEADER_MULTIPLE_PACKETS 4
+#define BLINK_RECEIVER_HEADER_DATETIME 5
+#define BLINK_RECEIVER_HEADER_DATETIME_EXACT 6
 
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
     (void) watch_face_index;
@@ -47,6 +56,7 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         blink_receiver_state_t *state = (blink_receiver_state_t *) *context_ptr;
 
         state->samples = malloc(MAX_SAMPLES_PER_BIT * sizeof(bool));
+        state->data = malloc(MAX_PACKAGE_COUNT * sizeof(uint32_t));
         state->light_level_border = DEFAULT_LIGHT_LEVEL_BORDER; 
         state->samples_per_bit = DEFAULT_SAMPLES_PER_BIT;
         state->frequency = DEFAULT_FREQUENCY;
@@ -72,70 +82,102 @@ uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_
 }
 
 //set local time to received timestamp
-void blink_receiver_handle_timeset(blink_receiver_state_t *state, bool exact)
+void blink_receiver_handle_timeset(bool exact, uint32_t data, uint8_t tick_cnt, uint8_t frequency)
 {
     watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "TE" : "TI");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
     watch_display_text(WATCH_POSITION_BOTTOM, "      ");
     
     watch_date_time_t date_time = movement_get_local_date_time();
-    date_time.unit.second = state->data >> 22 & 0b111111;
-    date_time.unit.minute = state->data >> 16 & 0b111111;
-    date_time.unit.hour = state->data >> 11 & 0b11111;
+    date_time.unit.second = data >> 22 & 0b111111;
+    date_time.unit.minute = data >> 16 & 0b111111;
+    date_time.unit.hour = data >> 11 & 0b11111;
 
-    if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)state->tick_cnt * 1000.0) / (double)state->frequency) + 0.5));
+    if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)tick_cnt * 1000.0) / (double)frequency) + 0.5));
     else movement_set_local_date_time(date_time);
 
     char outputString2[3];
-    snprintf(outputString2, 3, "%02d", state->data >> 11 & 0b11111);
+    snprintf(outputString2, 3, "%02d", data >> 11 & 0b11111);
     watch_display_string(outputString2, 4);
-    snprintf(outputString2, 3, "%02d", state->data >> 16 & 0b111111);
+    snprintf(outputString2, 3, "%02d", data >> 16 & 0b111111);
     watch_display_string(outputString2, 6);
-    snprintf(outputString2, 3, "%02d", state->data >> 22 & 0b111111);
+    snprintf(outputString2, 3, "%02d", data >> 22 & 0b111111);
     watch_display_string(outputString2, 8);
     watch_set_colon();
 }
 
+//set local date to received date and set local time to received timestamp
+void blink_receiver_handle_datetimeset(bool exact, uint32_t data1, uint32_t data2, uint8_t tick_cnt, uint8_t frequency)
+{
+    blink_receiver_handle_timeset(exact, data2, tick_cnt, frequency);
+    blink_receiver_handle_dateset(data1);
+    watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "AE" : "AI");
+}
+
 //set local date to received date
-void blink_receiver_handle_dateset(blink_receiver_state_t *state)
+void blink_receiver_handle_dateset(uint32_t data)
 {
     watch_display_text(WATCH_POSITION_TOP_LEFT, "DA");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
 
     char outputString2[3];
-    snprintf(outputString2, 3, "%02d", state->data >> 23 & 0b11111);
+    snprintf(outputString2, 3, "%02d", data >> 23 & 0b11111);
     watch_display_string(outputString2, 2);
 
-    snprintf(outputString2, 3, "%02d", state->data >> 19 & 0b1111);
+    snprintf(outputString2, 3, "%02d", data >> 19 & 0b1111);
     watch_display_string(outputString2, 8);
 
     char outputString4[5];
-    snprintf(outputString4, 5, "%04d", (state->data >> 13 & 0b111111) + 2020);
+    snprintf(outputString4, 5, "%04d", (data >> 13 & 0b111111) + 2020);
     printf(outputString4);
     watch_display_string(outputString4, 4);
     
     watch_date_time_t date_time = movement_get_local_date_time();
-    date_time.unit.day = state->data >> 23 & 0b11111;
-    date_time.unit.month = state->data >> 19 & 0b1111;
-    date_time.unit.year = state->data >> 13 & 0b111111; //todo?
+    date_time.unit.day = data >> 23 & 0b11111;
+    date_time.unit.month = data >> 19 & 0b1111;
+    date_time.unit.year = data >> 13 & 0b111111; //todo?
     movement_set_local_date_time(date_time);
 }
 
-// Handle the received 4 bytes. First 3 bytes are data, last byte is checksum. 
-void blink_receiver_handle_data(blink_receiver_state_t *state) {
-    uint8_t checksum = blink_receiver_calculate_checksum(state->data >> 24 & 0xFF, state->data >> 16 & 0xFF, state->data >> 8 & 0xFF);
-    if (checksum == (uint8_t)(state->data & 0xFF)) { //checksum ist last 8 bits
-        uint8_t header = (uint8_t)(state->data >> 28 & 0b1111); //header is first 4 bits
-        if (header == 1) blink_receiver_handle_timeset(state, false); // timestamp received
-        else if (header == 2) blink_receiver_handle_dateset(state); // date received
-        else if (header == 3) blink_receiver_handle_timeset(state, true); // exact timestamp received (ms == 0)
-        else watch_display_text(WATCH_POSITION_TOP_LEFT, "__"); // unknown header
+// Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
+bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data) {
+    uint8_t checksum = blink_receiver_calculate_checksum(data >> 24 & 0xFF, data >> 16 & 0xFF, data >> 8 & 0xFF);
+    if (checksum == (uint8_t)(data & 0xFF)) { //checksum ist last 8 bits
+        uint8_t header = (uint8_t)(data >> 28 & 0b1111); //header is first 4 bits
+        switch(header) {
+            case BLINK_RECEIVER_HEADER_TIMESET:     
+                blink_receiver_handle_timeset(data, false, state->tick_cnt, state->frequency); // timestamp received
+                break;
+            case BLINK_RECEIVER_HEADER_TIMESET_EXACT:
+                blink_receiver_handle_timeset(data, true, state->tick_cnt, state->frequency); // exact timestamp received (ms == 0)
+                break;
+            case BLINK_RECEIVER_HEADER_DATESET:
+                blink_receiver_handle_dateset(data); // date received
+                break;
+            case BLINK_RECEIVER_HEADER_DATETIME:
+                blink_receiver_handle_datetimeset(false, state->data[0], state->data[1], state->tick_cnt, state->frequency); // date and timestamp received
+                break;
+            case BLINK_RECEIVER_HEADER_DATETIME_EXACT:
+                blink_receiver_handle_datetimeset(true, state->data[0], state->data[1], state->tick_cnt, state->frequency); // date and exact timestamp received (ms == 0)
+                break;
+            case BLINK_RECEIVER_HEADER_MULTIPLE_PACKETS:
+                if (state->current_package + 1 < MAX_PACKAGE_COUNT) {
+                    watch_display_text(WATCH_POSITION_TOP_LEFT, "PA"); //one of multiple packages received
+                    return true;
+                } else {
+                    watch_display_text(WATCH_POSITION_TOP_LEFT, "PO"); // too many packages
+                }
+            default: 
+                watch_display_text(WATCH_POSITION_TOP_LEFT, "__"); // unknown header
+        }
     } else {
         //wrong checksum
         char outputString[3];
         snprintf(outputString, 3, "%02x", checksum);
         watch_display_text(WATCH_POSITION_TOP_LEFT, outputString);
     }
+
+    return false;
 }
 
 void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state) {
@@ -154,7 +196,10 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                 samples_received = 0;
                 if (blink_receiver_summarize_samples(state)) { //enough bright samples detected: transmission has started
                     state->bits_received = 0;
-                    state->data = 0;
+                    state->current_package = 0;
+                    for (int i = 0; i < MAX_PACKAGE_COUNT; i++) {
+                        state->data[i] = 0;
+                    }
                     state->mode = BLINK_RECEIVER_MODE_RECORD;
                 }
             }
@@ -165,14 +210,20 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
 
         if (samples_received == state->samples_per_bit) {
             samples_received = 0;
-            state->data = state->data << 1;
+            state->data[current_package] = state->data[current_package] << 1;
             if (blink_receiver_summarize_samples(state)) {         
-                state->data += 1;              
+                state->data[current_package] += 1;              
             }
             state->bits_received++;
-            if (state->bits_received == 32) { // transmission complete   
-                blink_receiver_handle_data(state);              
-                state->mode = BLINK_RECEIVER_MODE_IDLE;   
+            if (state->bits_received == 32) { // transmission of 32bit package complete   
+                if(blink_receiver_handle_data(state, state->data[current_package])) {
+                    //another package is coming
+                    state->bits_received = 0;
+                    current_package++;
+                } else {
+                    //transmission complete
+                    state->mode = BLINK_RECEIVER_MODE_IDLE;   
+                }
             }
         }
     }
