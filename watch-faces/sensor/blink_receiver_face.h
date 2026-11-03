@@ -42,17 +42,20 @@ typedef enum {
 } blink_receiver_mode;
 
 typedef struct {
+    blink_receiver_mode mode; 
+
     uint16_t light_level_border;
     uint8_t frequency;
     uint8_t samples_per_bit;
-    uint32_t data;
-    int16_t bits_received;  
-    blink_receiver_mode mode; 
-    uint8_t tick_cnt;
-    uint32_t last_second;
 
     bool *samples;           
+    uint32_t *data;
     uint8_t samples_received; 
+    int16_t bits_received;  
+    uint8_t current_package;
+
+    uint8_t tick_cnt;
+    uint32_t last_second;
 } blink_receiver_state_t;
 
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr);
