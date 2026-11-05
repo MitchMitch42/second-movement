@@ -195,18 +195,20 @@ bool blink_receiver_summarize_samples(blink_receiver_state_t *state) {
 void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state) {
     bool bright = adc_get_analog_value(HAL_GPIO_IRSENSE_pin()) < state->light_level_border;
 
-    if (waiting_for_start) { //waiting for start signal
-        if (state->samples_received > 0 || bright) { //only record samples if at least one bright sample has been received
-            state->samples[state->samples_received] = bright;
-            state->samples_received++;
+    if (!waiting_for_start || state->samples_received > 0 || bright) {
+        state->samples[state->samples_received] = bright;
+        state->samples_received++;
 
-            if(state->samples_received <= 8) {
-                watch_display_string(state->samples[state->samples_received - 1] ? "1" : "0", state->samples_received + 1);
-            }
+        if (waiting_for_start &&state->samples_received <= 8) {
+            watch_display_string(state->samples[state->samples_received - 1] ? "1" : "0", state->samples_received + 1);
+        }
 
-            if (state->samples_received == state->samples_per_bit) {
-                state->samples_received = 0;
-                if (blink_receiver_summarize_samples(state)) { //enough bright samples detected: transmission has started
+        if (state->samples_received == state->samples_per_bit) {
+            state->samples_received = 0;
+
+            if (waiting_for_start) {
+                if (blink_receiver_summarize_samples(state)) { 
+                    //enough bright samples detected: transmission has started
                     state->bits_received = 0;
                     state->current_package = 0;
                     for (int i = 0; i < MAX_PACKAGE_COUNT; i++) {
@@ -214,27 +216,23 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                     }
                     state->mode = BLINK_RECEIVER_MODE_RECORD;
                 }
-            }
-        }
-    } else { //start signal received: record the next 32 bit (32*samples_per_bit samples)
-        state->samples[state->samples_received] = bright;
-        state->samples_received++;   
+            } else {
+                //start signal received: record the next 32 bit (32*samples_per_bit samples)
+                state->data[state->current_package] = state->data[state->current_package] << 1;
+                if (blink_receiver_summarize_samples(state)) {
+                    state->data[state->current_package] += 1;
+                }
+                state->bits_received++;
 
-        if (state->samples_received == state->samples_per_bit) {
-            state->samples_received = 0;
-            state->data[state->current_package] = state->data[state->current_package] << 1;
-            if (blink_receiver_summarize_samples(state)) {         
-                state->data[state->current_package] += 1;              
-            }
-            state->bits_received++;
-            if (state->bits_received == 32) { // transmission of 32bit package complete   
-                if(blink_receiver_handle_data(state, state->data[state->current_package])) {
-                    //another package is coming
-                    state->bits_received = 0;
-                    state->current_package++;
-                } else {
-                    //transmission complete
-                    state->mode = BLINK_RECEIVER_MODE_IDLE;   
+                if (state->bits_received == 32) { // 32bit package complete
+                    if (blink_receiver_handle_data(state, state->data[state->current_package])) {
+                        //another package is coming
+                        state->bits_received = 0;
+                        state->current_package++;
+                    } else {
+                        //transmission complete
+                        state->mode = BLINK_RECEIVER_MODE_IDLE;
+                    }
                 }
             }
         }
