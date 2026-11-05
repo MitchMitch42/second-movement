@@ -33,6 +33,47 @@
 
 //#ifdef HAS_IR_SENSOR
 
+#define BR_DEBUG 1
+
+// 0x198800A1, with each bit repeated for eight samples.
+bool sample_array[] = {
+    1, 1, 1, 1, 1, 1, 1, 1, // 0: start bit (1)
+    0, 0, 0, 0, 0, 0, 0, 0, // 1: 0 (0x1)
+    0, 0, 0, 0, 0, 0, 0, 0, // 2: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 3: 0
+    1, 1, 1, 1, 1, 1, 1, 1, // 4: 1
+    1, 1, 1, 1, 1, 1, 1, 1, // 5: 1 (0x9)
+    0, 0, 0, 0, 0, 0, 0, 0, // 6: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 7: 0
+    1, 1, 1, 1, 1, 1, 1, 1, // 8: 1
+    1, 1, 1, 1, 1, 1, 1, 1, // 9: 1 (0x8)
+    0, 0, 0, 0, 0, 0, 0, 0, // 10: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 11: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 12: 0
+    1, 1, 1, 1, 1, 1, 1, 1, // 13: 1 (0x8)
+    0, 0, 0, 0, 0, 0, 0, 0, // 14: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 15: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 16: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 17: 0 (0x0)
+    0, 0, 0, 0, 0, 0, 0, 0, // 18: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 19: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 20: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 21: 0 (0x0)
+    0, 0, 0, 0, 0, 0, 0, 0, // 22: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 23: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 24: 0
+    1, 1, 1, 1, 1, 1, 1, 1, // 25: 1 (0xA)
+    0, 0, 0, 0, 0, 0, 0, 0, // 26: 0
+    1, 1, 1, 1, 1, 1, 1, 1, // 27: 1
+    0, 0, 0, 0, 0, 0, 0, 0, // 28: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 29: 0 (0x1)
+    0, 0, 0, 0, 0, 0, 0, 0, // 30: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 31: 0
+    1, 1, 1, 1, 1, 1, 1, 1  // 32: 1
+};
+
+size_t blink_receiver_idx = 0;
+
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
     (void) watch_face_index;
     if (*context_ptr == NULL) {
@@ -55,13 +96,17 @@ void blink_receiver_face_activate(void *context) {
     movement_request_tick_frequency(state->frequency);
 }
 
-blink_receiver_read_sensor() {
+uint16_t blink_receiver_read_sensor(void) {
     HAL_GPIO_IR_ENABLE_out();
     HAL_GPIO_IR_ENABLE_clr();
     HAL_GPIO_IRSENSE_pmuxen(HAL_GPIO_PMUX_ADC);
     adc_init();
     adc_enable();
     uint16_t ret= adc_get_analog_value(HAL_GPIO_IRSENSE_pin());
+    if (BR_DEBUG) {
+        ret = sample_array[blink_receiver_idx++ % (sizeof(sample_array) / sizeof(sample_array[0]))]
+            ? 0 : UINT16_MAX;
+    }
     adc_disable();
     HAL_GPIO_IRSENSE_pmuxdis();
     HAL_GPIO_IRSENSE_off();
@@ -220,6 +265,10 @@ void blink_receiver_handle_datetimeset(bool exact, uint32_t data1, uint32_t data
 
 // Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
 bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data) {
+    char outputString9[9];
+    snprintf(outputString9, 9, "%08x", data);
+    watch_display_string(outputString9, 2);
+    
     blink_receiver_packet_data_t packet = { .reg = data };
     uint8_t checksum = blink_receiver_calculate_checksum(packet.bytes.byte_1, packet.bytes.byte_2, packet.bytes.byte_3);
     if (checksum == packet.bytes.checksum) {
@@ -375,6 +424,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     state->samples_received = 0;
                     state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
                     watch_display_string("        ", 2);
+                    blink_receiver_idx = 0;
                     break;
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:
                 case BLINK_RECEIVER_MODE_RECORD:
