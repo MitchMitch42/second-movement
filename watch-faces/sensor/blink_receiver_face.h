@@ -60,7 +60,8 @@ typedef enum {
   BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE,
   BLINK_RECEIVER_MODE_RECORD,
   BLINK_RECEIVER_MODE_CALC,
-  BLINK_RECEIVER_MODE_SETTING
+  BLINK_RECEIVER_MODE_SETTING,
+  BLINK_RECEIVER_MODE_HISTORY
 } blink_receiver_mode;
 
 typedef union {
@@ -111,6 +112,7 @@ typedef struct {
     int16_t bits_received;  
     uint8_t current_package;
     uint8_t settings_state;
+    uint8_t history_position;
 
     uint8_t tick_cnt;
     uint32_t last_second;
