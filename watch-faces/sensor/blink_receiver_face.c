@@ -112,29 +112,22 @@ static void blink_receiver_exit_settings(blink_receiver_state_t *state) {
 }
 
 static void blink_receiver_display_history(blink_receiver_state_t *state) {
-    char bit_number[3];
-    char samples[9];
+    char buf[11] = "          ";
     uint8_t bit_index = state->samples_per_bit > 8
         ? state->history_position / 2 : state->history_position;
     uint8_t sample_start = state->samples_per_bit > 8 && state->history_position % 2 ? 8 : 0;
     uint8_t visible_samples = state->samples_per_bit > sample_start
         ? state->samples_per_bit - sample_start : 0;
-    if (visible_samples > sizeof(samples) - 1) visible_samples = sizeof(samples) - 1;
+    if (visible_samples > 8) visible_samples = 8;
 
-    snprintf(bit_number, sizeof(bit_number), "%02u", (unsigned)(bit_index + 1));
-    watch_display_text(WATCH_POSITION_TOP_LEFT, bit_number);
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
-    memset(samples, ' ', sizeof(samples) - 1);
-    samples[sizeof(samples) - 1] = '\0';
-
+    snprintf(buf + 2, 3, "%2u", (unsigned)(bit_index + 1));
     for (uint8_t i = 0; i < visible_samples; i++) {
         uint8_t sample_index = sample_start + i;
         uint8_t shift = state->samples_per_bit - sample_index - 1;
-        samples[i] = state->sample_history[bit_index] & (1u << shift) ? '1' : '0';
+        buf[i < 2 ? i : i + 2] = state->sample_history[bit_index] & (1u << shift) ? '1' : '0';
     }
 
-    watch_display_string(samples, 2);
+    watch_display_string(buf, 0);
 }
 
 static void blink_receiver_move_history(blink_receiver_state_t *state, int8_t direction) {
