@@ -199,7 +199,10 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
         state->samples[state->samples_received] = bright;
         state->samples_received++;
 
-        if (waiting_for_start &&state->samples_received <= 8) {
+        if(state->samples_received == 1) {
+            watch_display_string("        ", 2);
+        }
+        if (state->samples_received <= 8) {
             watch_display_string(state->samples[state->samples_received - 1] ? "1" : "0", state->samples_received + 1);
         }
 
@@ -306,8 +309,10 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             state->frequency *= 2;
             if (state->frequency > MAX_FREQUENCY)
                 state->frequency = 1;
-            snprintf(buf, 3, "%02d", state->frequency);
+            snprintf(buf, 3, "%2d", state->frequency);
+            watch_display_string("  ", 2);
             watch_display_string(buf, 2);
+            watch_display_string("FC", 0);
             movement_request_tick_frequency(state->frequency);
             state->last_second = 62;
             state->mode = BLINK_RECEIVER_MODE_CALC;   
@@ -317,8 +322,10 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             state->samples_per_bit *= 2;
             if (state->samples_per_bit > MAX_SAMPLES_PER_BIT)
                 state->samples_per_bit = 1;
-            snprintf(buf, 3, "%02d", state->samples_per_bit);
+            snprintf(buf, 3, "%2d", state->samples_per_bit);
+            watch_display_string("  ", 2);
             watch_display_string(buf, 2);
+            watch_display_string("SA", 0);
             state->mode = BLINK_RECEIVER_MODE_IDLE;
             break;
         case EVENT_LIGHT_LONG_PRESS:
@@ -329,6 +336,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             snprintf(buf, 6, "%5d", state->light_level_border);
             watch_display_string("      ", 4);
             watch_display_string(buf, 4);
+            watch_display_string("LL", 0);
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
             break; //do not illuminate led
