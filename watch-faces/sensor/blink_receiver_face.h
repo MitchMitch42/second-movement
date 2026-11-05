@@ -41,6 +41,40 @@ typedef enum {
   BLINK_RECEIVER_MODE_CALC
 } blink_receiver_mode;
 
+typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t unused : 3;
+        uint32_t hour : 5;
+        uint32_t minute : 6;
+        uint32_t second : 6;
+        uint32_t header : 4;
+    } time;
+    uint32_t reg;
+} blink_receiver_packet_time_t;
+
+typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t unused : 5;
+        uint32_t year : 6;
+        uint32_t month : 4;
+        uint32_t day : 5;
+        uint32_t header : 4;
+    } date;
+    uint32_t reg;
+} blink_receiver_packet_date_t;
+
+typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t byte_3 : 8;
+        uint32_t byte_2 : 8;
+        uint32_t byte_1 : 8; //4 bits header + 4 bits data
+    } bytes;
+    uint32_t reg;
+} blink_receiver_packet_data_t;
+
 typedef struct {
     blink_receiver_mode mode; 
 
