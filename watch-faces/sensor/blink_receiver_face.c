@@ -82,52 +82,54 @@ uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_
 }
 
 //set local time to received timestamp
-void blink_receiver_handle_timeset(bool exact, uint32_t data, uint8_t tick_cnt, uint8_t frequency)
+void blink_receiver_handle_timeset(bool exact, uint32_t packet, uint8_t tick_cnt, uint8_t frequency)
 {
+    blink_receiver_packet_time_t data = { .reg = packet };
     watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "TE" : "TI");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
     watch_display_text(WATCH_POSITION_BOTTOM, "      ");
     
     watch_date_time_t date_time = movement_get_local_date_time();
-    date_time.unit.second = data >> 22 & 0b111111;
-    date_time.unit.minute = data >> 16 & 0b111111;
-    date_time.unit.hour = data >> 11 & 0b11111;
+    date_time.unit.second = data.time.second;
+    date_time.unit.minute = data.time.minute;
+    date_time.unit.hour = data.time.hour;
 
     if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)tick_cnt * 1000.0) / (double)frequency) + 0.5));
     else movement_set_local_date_time(date_time);
 
     char outputString2[3];
-    snprintf(outputString2, 3, "%02d", data >> 11 & 0b11111);
+    snprintf(outputString2, 3, "%02d", data.time.hour);
     watch_display_string(outputString2, 4);
-    snprintf(outputString2, 3, "%02d", data >> 16 & 0b111111);
+    snprintf(outputString2, 3, "%02d", data.time.minute);
     watch_display_string(outputString2, 6);
-    snprintf(outputString2, 3, "%02d", data >> 22 & 0b111111);
+    snprintf(outputString2, 3, "%02d", data.time.second);
     watch_display_string(outputString2, 8);
     watch_set_colon();
 }
 
 //set local date to received date
-void blink_receiver_handle_dateset(uint32_t data)
+void blink_receiver_handle_dateset(uint32_t packet)
 {
+    blink_receiver_packet_date_t data = { .reg = packet };
     watch_display_text(WATCH_POSITION_TOP_LEFT, "DA");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
 
     char outputString2[3];
-    snprintf(outputString2, 3, "%02d", data >> 23 & 0b11111);
+    snprintf(outputString2, 3, "%02d", data.date.day);
     watch_display_string(outputString2, 2);
 
-    snprintf(outputString2, 3, "%02d", data >> 19 & 0b1111);
+    snprintf(outputString2, 3, "%02d", data.date.month);
     watch_display_string(outputString2, 8);
 
     char outputString4[5];
-    snprintf(outputString4, 5, "%04d", (data >> 13 & 0b111111) + 2020);
+    snprintf(outputString4, 5, "%04d", (data.date.year) + 2020);
     printf(outputString4);
     watch_display_string(outputString4, 4);
     
     watch_date_time_t date_time = movement_get_local_date_time();
-    date_time.unit.day = data >> 23 & 0b11111;
-    date_time.unit.month = data >> 19 & 0b1111;
-    date_time.unit.year = data >> 13 & 0b111111; //todo?
+    date_time.unit.day = data.date.day;
+    date_time.unit.month = data.date.month;
+    date_time.unit.year = data.date.year; 
     movement_set_local_date_time(date_time);
 }
 
@@ -141,15 +143,15 @@ void blink_receiver_handle_datetimeset(bool exact, uint32_t data1, uint32_t data
 
 // Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
 bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data) {
-    uint8_t checksum = blink_receiver_calculate_checksum(data >> 24 & 0xFF, data >> 16 & 0xFF, data >> 8 & 0xFF);
-    if (checksum == (uint8_t)(data & 0xFF)) { //checksum ist last 8 bits
-        uint8_t header = (uint8_t)(data >> 28 & 0b1111); //header is first 4 bits
-        switch(header) {
+    blink_receiver_packet_data_t packet = { .reg = data };
+    uint8_t checksum = blink_receiver_calculate_checksum(packet.bytes.byte_1, packet.bytes.byte_2, packet.bytes.byte_3);
+    if (checksum == packet.bytes.checksum) {
+        switch(packet.bytes.byte_1 >> 4) { //header is the first 4 bits
             case BLINK_RECEIVER_HEADER_TIMESET:     
-                blink_receiver_handle_timeset(data, false, state->tick_cnt, state->frequency); // timestamp received
+                blink_receiver_handle_timeset(false, data, state->tick_cnt, state->frequency); // timestamp received
                 break;
             case BLINK_RECEIVER_HEADER_TIMESET_EXACT:
-                blink_receiver_handle_timeset(data, true, state->tick_cnt, state->frequency); // exact timestamp received (ms == 0)
+                blink_receiver_handle_timeset(true, data, state->tick_cnt, state->frequency); // exact timestamp received (ms == 0)
                 break;
             case BLINK_RECEIVER_HEADER_DATESET:
                 blink_receiver_handle_dateset(data); // date received
