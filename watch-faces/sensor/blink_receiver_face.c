@@ -111,6 +111,46 @@ static void blink_receiver_exit_settings(blink_receiver_state_t *state) {
     state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
 }
 
+static void blink_receiver_display_history(blink_receiver_state_t *state) {
+    char bit_number[3];
+    char samples[9];
+    uint8_t bit_index = state->samples_per_bit > 8
+        ? state->history_position / 2 : state->history_position;
+    uint8_t sample_start = state->samples_per_bit > 8 && state->history_position % 2 ? 8 : 0;
+    uint8_t visible_samples = state->samples_per_bit > sample_start
+        ? state->samples_per_bit - sample_start : 0;
+    if (visible_samples > sizeof(samples) - 1) visible_samples = sizeof(samples) - 1;
+
+    snprintf(bit_number, sizeof(bit_number), "%02u", (unsigned)(bit_index + 1));
+    watch_display_text(WATCH_POSITION_TOP_LEFT, bit_number);
+    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    memset(samples, ' ', sizeof(samples) - 1);
+    samples[sizeof(samples) - 1] = '\0';
+
+    for (uint8_t i = 0; i < visible_samples; i++) {
+        uint8_t sample_index = sample_start + i;
+        uint8_t shift = state->samples_per_bit - sample_index - 1;
+        samples[i] = state->sample_history[bit_index] & (1u << shift) ? '1' : '0';
+    }
+
+    watch_display_string(samples, 2);
+}
+
+static void blink_receiver_move_history(blink_receiver_state_t *state, int8_t direction) {
+    uint8_t history_length = BITS_PER_PACKAGE * (state->samples_per_bit > 8 ? 2 : 1);
+    state->history_position = (state->history_position + history_length + direction) % history_length;
+    blink_receiver_display_history(state);
+}
+
+static uint16_t blink_receiver_pack_samples(uint8_t samples_per_bit, bool *samples) {
+    uint16_t pattern = 0;
+    for (uint8_t i = 0; i < samples_per_bit; i++) {
+        pattern = (uint16_t)((pattern << 1) | (samples[i] ? 1u : 0u));
+    }
+    return pattern;
+}
+
 uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_t data_3)
 {
     uint32_t sum = (uint32_t)data_1 + (uint32_t)data_2 + (uint32_t)data_3;
@@ -218,14 +258,6 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data) {
     return false;
 }
 
-uint16_t blink_receiver_pack_samples(uint8_t samples_per_bit, bool *samples) {
-    uint16_t pattern = 0;
-    for (int i = 0; i < samples_per_bit; i++) {
-        pattern = (uint16_t)((pattern << 1) | (samples[i] ? 1u : 0u));
-    }
-    return pattern;
-}
-
 bool blink_receiver_summarize_samples(uint8_t samples_per_bit, bool *samples) {
     uint8_t bright_sample_count = 0;
     for (int i = 0; i < samples_per_bit; i++) {
@@ -251,6 +283,7 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
         }
 
         if (state->samples_received == state->samples_per_bit) {
+            //enough samples received for a single bit
             state->samples_received = 0;
 
             if (waiting_for_start) {
@@ -354,15 +387,32 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             }
             break;
         case EVENT_ALARM_LONG_PRESS:
+            if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
+                state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
+                watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
+                watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+                watch_display_string("        ", 2);
+                watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+            } else if (state->mode != BLINK_RECEIVER_MODE_SETTING
+                && state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE
+                && state->mode != BLINK_RECEIVER_MODE_RECORD) {
+                state->history_position = 0;
+                state->mode = BLINK_RECEIVER_MODE_HISTORY;
+                blink_receiver_display_history(state);
+            }
             break;
         case EVENT_ALARM_BUTTON_DOWN:
-            if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
+            if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
+                blink_receiver_move_history(state, 1);
+            } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
                 blink_receiver_advance_setting(state);
                 blink_receiver_display_settings(state);
             }
             break;
         case EVENT_LIGHT_LONG_PRESS:
-            if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
+            if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
+                break;
+            } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
                 blink_receiver_exit_settings(state);
             } else if (state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE && state->mode != BLINK_RECEIVER_MODE_RECORD) {
                 state->settings_state = 0;
@@ -371,7 +421,9 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             }
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
-            if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
+            if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
+                blink_receiver_move_history(state, -1);
+            } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
                 state->settings_state++;
                 if (state->settings_state > 2) {
                     blink_receiver_exit_settings(state);
