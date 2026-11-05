@@ -63,7 +63,6 @@ void blink_receiver_face_activate(void *context) {
 
 static void blink_receiver_display_settings(blink_receiver_state_t *state) {
     char buf[6];
-    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
 
     switch (state->settings_state) {
@@ -79,6 +78,7 @@ static void blink_receiver_display_settings(blink_receiver_state_t *state) {
             break;
         case 2:
             watch_display_text(WATCH_POSITION_TOP_LEFT, "LL");
+            watch_display_text(WATCH_POSITION_BOTTOM, "      ");
             snprintf(buf, sizeof(buf), "%5u", state->light_level_border);
             watch_display_string(buf, 4);
             break;
