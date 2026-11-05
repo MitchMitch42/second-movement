@@ -51,14 +51,22 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
 
 void blink_receiver_face_activate(void *context) {
     (void) context;
+    blink_receiver_state_t *state = (blink_receiver_state_t *)context;
+    movement_request_tick_frequency(state->frequency);
+}
+
+blink_receiver_read_sensor() {
     HAL_GPIO_IR_ENABLE_out();
     HAL_GPIO_IR_ENABLE_clr();
     HAL_GPIO_IRSENSE_pmuxen(HAL_GPIO_PMUX_ADC);
     adc_init();
     adc_enable();
-
-    blink_receiver_state_t *state = (blink_receiver_state_t *)context;
-    movement_request_tick_frequency(state->frequency);
+    uint16_t ret= adc_get_analog_value(HAL_GPIO_IRSENSE_pin());
+    adc_disable();
+    HAL_GPIO_IRSENSE_pmuxdis();
+    HAL_GPIO_IRSENSE_off();
+    HAL_GPIO_IR_ENABLE_off();
+    return ret;
 }
 
 static void blink_receiver_display_settings(blink_receiver_state_t *state) {
@@ -262,7 +270,7 @@ bool blink_receiver_summarize_samples(uint8_t samples_per_bit, bool *samples) {
 }
 
 void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state) {
-    bool bright = adc_get_analog_value(HAL_GPIO_IRSENSE_pin()) < state->light_level_border;
+    bool bright = blink_receiver_read_sensor() < state->light_level_border;
 
     if (!waiting_for_start || state->samples_received > 0 || bright) {
         state->samples[state->samples_received] = bright;
@@ -333,9 +341,8 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             state->tick_cnt = (state->tick_cnt + 1) % state->frequency;        
             switch (state->mode) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
-                    // starting state: show current light value
-                    
-                    snprintf(buf, 7, "%-6d", adc_get_analog_value(HAL_GPIO_IRSENSE_pin()));
+                    // starting state: show current light value          
+                    snprintf(buf, 7, "%-6d", blink_receiver_read_sensor());
                     watch_display_text(WATCH_POSITION_BOTTOM, buf);
                     break;            
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:     
@@ -443,11 +450,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
 
 void blink_receiver_face_resign(void *context) {
     (void) context;
-
-    adc_disable();
-    HAL_GPIO_IRSENSE_pmuxdis();
-    HAL_GPIO_IRSENSE_off();
-    HAL_GPIO_IR_ENABLE_off();
 }
 
 //#endif // HAS_IR_SENSOR
