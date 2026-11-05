@@ -361,7 +361,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                         state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
                     }
                     break;     
-                default: //IDLE
+                default: //IDLE and SETTINGS and HISTORY
                     break;
             }
             break;
@@ -388,6 +388,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_ALARM_LONG_PRESS:
             if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
+                //exit history
                 state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
                 watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
                 watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
@@ -396,6 +397,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             } else if (state->mode != BLINK_RECEIVER_MODE_SETTING
                 && state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE
                 && state->mode != BLINK_RECEIVER_MODE_RECORD) {
+                //enter history
                 state->history_position = 0;
                 state->mode = BLINK_RECEIVER_MODE_HISTORY;
                 blink_receiver_display_history(state);
