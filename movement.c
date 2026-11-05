@@ -445,9 +445,13 @@ void movement_request_tick_frequency(uint8_t freq) {
 void movement_illuminate_led(void) {
     if (movement_state.settings.bit.led_duration != 0b111) {
         movement_state.light_on = true;
-        watch_set_led_color_rgb(movement_state.settings.bit.led_red_color | movement_state.settings.bit.led_red_color << 4,
-                                movement_state.settings.bit.led_green_color | movement_state.settings.bit.led_green_color << 4,
-                                movement_state.settings.bit.led_blue_color | movement_state.settings.bit.led_blue_color << 4);
+        if (movement_state.led_is_permanently_on) {
+            watch_set_led_color_rgb(0, 255, 255); //brightest color for torch mode
+        } else {
+            watch_set_led_color_rgb(movement_state.settings.bit.led_red_color | movement_state.settings.bit.led_red_color << 4,
+                                    movement_state.settings.bit.led_green_color | movement_state.settings.bit.led_green_color << 4,
+                                    movement_state.settings.bit.led_blue_color | movement_state.settings.bit.led_blue_color << 4);
+        }
        
         uint32_t timeout_seconds = 0;
         if (movement_state.led_is_permanently_on) {
@@ -522,9 +526,16 @@ bool movement_default_loop_handler(movement_event_t event) {
                 movement_move_to_face(0);
             }
             break;
-        case EVENT_ALARM_BUTTON_UP:
-            if (MOVEMENT_TERTIARY_FACE_INDEX && movement_state.current_face_idx == 0) {
+        case EVENT_MODE_REALLY_LONG_PRESS:
+            if (MOVEMENT_TERTIARY_FACE_INDEX && movement_state.current_face_idx == MOVEMENT_SECONDARY_FACE_INDEX) {
                 movement_move_to_face(MOVEMENT_TERTIARY_FACE_INDEX);
+            }
+            break;
+        case EVENT_ALARM_LONG_PRESS:
+            if (MOVEMENT_QUATERNARY_FACE_INDEX && movement_state.current_face_idx == 0) {
+                movement_move_to_face(MOVEMENT_QUATERNARY_FACE_INDEX);
+            } else if(MOVEMENT_QUATERNARY_FACE_INDEX && movement_state.current_face_idx == MOVEMENT_QUATERNARY_FACE_INDEX) {
+                movement_move_to_face(0);
             }
             break; 
         default:
@@ -543,6 +554,7 @@ void movement_move_to_next_face(void) {
     uint16_t face_max =
         (movement_state.current_face_idx < (int16_t)MOVEMENT_SECONDARY_FACE_INDEX) ? MOVEMENT_SECONDARY_FACE_INDEX : 
         (movement_state.current_face_idx < (int16_t)MOVEMENT_TERTIARY_FACE_INDEX) ? MOVEMENT_TERTIARY_FACE_INDEX : 
+        (movement_state.current_face_idx < (int16_t)MOVEMENT_QUATERNARY_FACE_INDEX) ? MOVEMENT_QUATERNARY_FACE_INDEX : 
         MOVEMENT_NUM_FACES;  
     movement_move_to_face((movement_state.current_face_idx + 1) % face_max);
 }
@@ -877,7 +889,7 @@ void movement_set_alarm_enabled(bool value) {
     movement_state.alarm_enabled = value;
 }
 
-bool movement_enable_tap_detection_if_available(void) {
+bool movement_enable_tap_detection_if_available(bool enable_double_tap) {
     if (movement_state.has_lis2dw) {
         // configure tap duration threshold and enable Z axis
         lis2dw_configure_tap_threshold(0, 0, 12, LIS2DW_REG_TAP_THS_Z_Z_AXIS_ENABLE);
@@ -887,13 +899,20 @@ bool movement_enable_tap_detection_if_available(void) {
         lis2dw_set_low_noise_mode(true);
         lis2dw_set_data_rate(LIS2DW_DATA_RATE_HP_400_HZ);
         lis2dw_set_mode(LIS2DW_MODE_LOW_POWER);
-        lis2dw_enable_double_tap();
+
+        if (enable_double_tap) {
+            lis2dw_enable_double_tap();
+        }
 
         // Settling time (1 sample duration, i.e. 1/400Hz)
         delay_ms(3);
 
         // enable tap detection on INT1/A3.
-        lis2dw_configure_int1(LIS2DW_CTRL4_INT1_SINGLE_TAP | LIS2DW_CTRL4_INT1_DOUBLE_TAP);
+        uint8_t int1_sources = LIS2DW_CTRL4_INT1_SINGLE_TAP;
+        if (enable_double_tap) {
+            int1_sources |= LIS2DW_CTRL4_INT1_DOUBLE_TAP;
+        }
+        lis2dw_configure_int1(int1_sources);
 
         return true;
     }

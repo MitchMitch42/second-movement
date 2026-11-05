@@ -83,8 +83,11 @@
 #include "tomato_face.h"
 #include "solar_time_face.h"
 #include "tide_face.h"
+#include "world_clock2_face.h"
+#include "hydration_face.h"
 #include "blink_receiver_face.h"
 #include "tamagotchi_face.h"
 #include "temperature_prediction_face.h"
 #include "easteregg_face.h"
+#include "workout_face.h"
 // New includes go above this line.
