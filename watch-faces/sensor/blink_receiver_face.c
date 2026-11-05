@@ -36,6 +36,9 @@
 #define DEFAULT_LIGHT_LEVEL_BORDER 65200
 #define DEFAULT_SAMPLES_PER_BIT 8
 #define DEFAULT_FREQUENCY 64 
+#define MIN_LIGHT_LEVEL_BORDER 65100
+#define MAX_LIGHT_LEVEL_BORDER 65500
+#define LIGHT_LEVEL_BORDER_STEP 10
 
 #define MAX_SAMPLES_PER_BIT 16
 #define MAX_FREQUENCY 64
@@ -73,6 +76,56 @@ void blink_receiver_face_activate(void *context) {
 
     blink_receiver_state_t *state = (blink_receiver_state_t *)context;
     movement_request_tick_frequency(state->frequency);
+}
+
+static void blink_receiver_display_settings(blink_receiver_state_t *state) {
+    char buf[6];
+    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+
+    switch (state->settings_state) {
+        case 0:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "FC");
+            snprintf(buf, sizeof(buf), "%2u", state->frequency);
+            watch_display_string(buf, 2);
+            break;
+        case 1:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "SA");
+            snprintf(buf, sizeof(buf), "%2u", state->samples_per_bit);
+            watch_display_string(buf, 2);
+            break;
+        case 2:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "LL");
+            snprintf(buf, sizeof(buf), "%5u", state->light_level_border);
+            watch_display_string(buf, 4);
+            break;
+        default:
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
+            break;
+    }
+}
+
+static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
+    switch (state->settings_state) {
+        case 0:
+            state->frequency *= 2;
+            if (state->frequency > MAX_FREQUENCY) state->frequency = 1;
+            break;
+        case 1:
+            state->samples_per_bit *= 2;
+            if (state->samples_per_bit > MAX_SAMPLES_PER_BIT) state->samples_per_bit = 1;
+            break;
+        case 2:
+            state->light_level_border += LIGHT_LEVEL_BORDER_STEP;
+            if (state->light_level_border > MAX_LIGHT_LEVEL_BORDER) state->light_level_border = MIN_LIGHT_LEVEL_BORDER;
+            break;
+        default:
+            break;
+    }
+}
+
+static void blink_receiver_exit_settings(blink_receiver_state_t *state) {
+    state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
 }
 
 uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_t data_3)
@@ -249,7 +302,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
         case EVENT_NONE:
             break;
         case EVENT_ACTIVATE:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP, "BLINK", "BL");
+            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
             state->samples_received = 0;
             state->last_second = 62;
             state->mode = BLINK_RECEIVER_MODE_CALC;         
@@ -305,41 +358,37 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             }
             break;
         case EVENT_ALARM_LONG_PRESS:
-            //change frequency (1 Hz - 64 Hz)
-            state->frequency *= 2;
-            if (state->frequency > MAX_FREQUENCY)
-                state->frequency = 1;
-            snprintf(buf, 3, "%2d", state->frequency);
-            watch_display_string("  ", 2);
-            watch_display_string(buf, 2);
-            watch_display_string("FC", 0);
-            movement_request_tick_frequency(state->frequency);
-            state->last_second = 62;
-            state->mode = BLINK_RECEIVER_MODE_CALC;   
+        case EVENT_ALARM_LONG_UP:
             break;
-        case EVENT_LIGHT_BUTTON_UP:
-            //changes samples_per_bit (1 to 16)
-            state->samples_per_bit *= 2;
-            if (state->samples_per_bit > MAX_SAMPLES_PER_BIT)
-                state->samples_per_bit = 1;
-            snprintf(buf, 3, "%2d", state->samples_per_bit);
-            watch_display_string("  ", 2);
-            watch_display_string(buf, 2);
-            watch_display_string("SA", 0);
-            state->mode = BLINK_RECEIVER_MODE_IDLE;
+        case EVENT_ALARM_BUTTON_DOWN:
+            if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
+                blink_receiver_advance_setting(state);
+                blink_receiver_display_settings(state);
+            }
             break;
         case EVENT_LIGHT_LONG_PRESS:
-            //change light level border (65400 - 65500)
-            state->light_level_border += 10;
-            if (state->light_level_border > 65500)
-                state->light_level_border = 65100;
-            snprintf(buf, 6, "%5d", state->light_level_border);
-            watch_display_string("      ", 4);
-            watch_display_string(buf, 4);
-            watch_display_string("LL", 0);
+            if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
+                blink_receiver_exit_settings(state);
+            } else if (state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE && state->mode != BLINK_RECEIVER_MODE_RECORD) {
+                state->settings_state = 0;
+                state->mode = BLINK_RECEIVER_MODE_SETTING;
+                blink_receiver_display_settings(state);
+            }
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
-            break; //do not illuminate led
+            if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
+                state->settings_state++;
+                if (state->settings_state > 2) {
+                    blink_receiver_exit_settings(state);
+                } else {
+                    blink_receiver_display_settings(state);
+                }
+            } else {
+                movement_illuminate_led();
+            }
+            break;
+        case EVENT_LIGHT_BUTTON_UP:
+            break;
         case EVENT_TIMEOUT:
             //movement_move_to_face(0);
             break;
