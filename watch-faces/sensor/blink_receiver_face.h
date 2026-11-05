@@ -33,6 +33,27 @@
  *
  */
 
+#define DEFAULT_LIGHT_LEVEL_BORDER 65200
+#define MIN_LIGHT_LEVEL_BORDER 65100
+#define MAX_LIGHT_LEVEL_BORDER 65500
+#define LIGHT_LEVEL_BORDER_STEP 10
+
+#define DEFAULT_SAMPLES_PER_BIT 8
+#define MAX_SAMPLES_PER_BIT 16
+
+#define DEFAULT_FREQUENCY 64
+#define MAX_FREQUENCY 64
+
+#define BITS_PER_PACKAGE 32
+#define MAX_PACKAGE_COUNT 4
+
+#define BLINK_RECEIVER_HEADER_TIMESET 1
+#define BLINK_RECEIVER_HEADER_DATESET 2
+#define BLINK_RECEIVER_HEADER_TIMESET_EXACT 3
+#define BLINK_RECEIVER_HEADER_MULTIPLE_PACKETS 4
+#define BLINK_RECEIVER_HEADER_DATETIME 5
+#define BLINK_RECEIVER_HEADER_DATETIME_EXACT 6
+
 typedef enum {
   BLINK_RECEIVER_MODE_IDLE,
   BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT,
@@ -83,7 +104,8 @@ typedef struct {
     uint8_t frequency;
     uint8_t samples_per_bit;
 
-    bool *samples;           
+    bool *samples;
+    uint16_t *sample_history;
     uint32_t *data;
     uint8_t samples_received; 
     int16_t bits_received;  
