@@ -38,7 +38,8 @@ typedef enum {
   BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT,
   BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE,
   BLINK_RECEIVER_MODE_RECORD,
-  BLINK_RECEIVER_MODE_CALC
+  BLINK_RECEIVER_MODE_CALC,
+  BLINK_RECEIVER_MODE_SETTING
 } blink_receiver_mode;
 
 typedef union {
@@ -87,6 +88,7 @@ typedef struct {
     uint8_t samples_received; 
     int16_t bits_received;  
     uint8_t current_package;
+    uint8_t settings_state;
 
     uint8_t tick_cnt;
     uint32_t last_second;
