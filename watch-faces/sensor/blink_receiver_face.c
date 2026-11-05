@@ -33,24 +33,6 @@
 
 //#ifdef HAS_IR_SENSOR
 
-#define DEFAULT_LIGHT_LEVEL_BORDER 65200
-#define DEFAULT_SAMPLES_PER_BIT 8
-#define DEFAULT_FREQUENCY 64 
-#define MIN_LIGHT_LEVEL_BORDER 65100
-#define MAX_LIGHT_LEVEL_BORDER 65500
-#define LIGHT_LEVEL_BORDER_STEP 10
-
-#define MAX_SAMPLES_PER_BIT 16
-#define MAX_FREQUENCY 64
-#define MAX_PACKAGE_COUNT 4
-
-#define BLINK_RECEIVER_HEADER_TIMESET 1
-#define BLINK_RECEIVER_HEADER_DATESET 2
-#define BLINK_RECEIVER_HEADER_TIMESET_EXACT 3
-#define BLINK_RECEIVER_HEADER_MULTIPLE_PACKETS 4
-#define BLINK_RECEIVER_HEADER_DATETIME 5
-#define BLINK_RECEIVER_HEADER_DATETIME_EXACT 6
-
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
     (void) watch_face_index;
     if (*context_ptr == NULL) {
@@ -58,7 +40,8 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         memset(*context_ptr, 0, sizeof(blink_receiver_state_t));
         blink_receiver_state_t *state = (blink_receiver_state_t *) *context_ptr;
 
-        state->samples = malloc(MAX_SAMPLES_PER_BIT * sizeof(bool));
+        state->samples = malloc(MAX_SAMPLES_PER_BIT * sizeof(*state->samples));
+        state->sample_history = malloc(BITS_PER_PACKAGE * sizeof(*state->sample_history));
         state->data = malloc(MAX_PACKAGE_COUNT * sizeof(uint32_t));
         state->light_level_border = DEFAULT_LIGHT_LEVEL_BORDER; 
         state->samples_per_bit = DEFAULT_SAMPLES_PER_BIT;
@@ -235,14 +218,22 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data) {
     return false;
 }
 
-bool blink_receiver_summarize_samples(blink_receiver_state_t *state) {
+uint16_t blink_receiver_pack_samples(uint8_t samples_per_bit, bool *samples) {
+    uint16_t pattern = 0;
+    for (int i = 0; i < samples_per_bit; i++) {
+        pattern = (uint16_t)((pattern << 1) | (samples[i] ? 1u : 0u));
+    }
+    return pattern;
+}
+
+bool blink_receiver_summarize_samples(uint8_t samples_per_bit, bool *samples) {
     uint8_t bright_sample_count = 0;
-    for (int i = 0; i < state->samples_per_bit; i++) {
-        if (state->samples[i]) {
+    for (int i = 0; i < samples_per_bit; i++) {
+        if (samples[i]) {
             bright_sample_count++;
         }
     }
-    return bright_sample_count >= (state->samples_per_bit / 2);
+    return bright_sample_count >= (samples_per_bit / 2);
 }
 
 void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state) {
@@ -263,24 +254,29 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
             state->samples_received = 0;
 
             if (waiting_for_start) {
-                if (blink_receiver_summarize_samples(state)) { 
+                if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
                     //enough bright samples detected: transmission has started
                     state->bits_received = 0;
                     state->current_package = 0;
                     for (int i = 0; i < MAX_PACKAGE_COUNT; i++) {
                         state->data[i] = 0;
                     }
+                    for (int i = 0; i < BITS_PER_PACKAGE; i++) {
+                        state->sample_history[i] = 0;
+                    }
                     state->mode = BLINK_RECEIVER_MODE_RECORD;
                 }
             } else {
                 //start signal received: record the next 32 bit (32*samples_per_bit samples)
+                state->sample_history[state->bits_received] =
+                    blink_receiver_pack_samples(state->samples_per_bit, state->samples);
                 state->data[state->current_package] = state->data[state->current_package] << 1;
-                if (blink_receiver_summarize_samples(state)) {
+                if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
                     state->data[state->current_package] += 1;
                 }
                 state->bits_received++;
 
-                if (state->bits_received == 32) { // 32bit package complete
+                if (state->bits_received == BITS_PER_PACKAGE) { // 32bit package complete
                     if (blink_receiver_handle_data(state, state->data[state->current_package])) {
                         //another package is coming
                         state->bits_received = 0;
@@ -358,7 +354,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             }
             break;
         case EVENT_ALARM_LONG_PRESS:
-        case EVENT_ALARM_LONG_UP:
             break;
         case EVENT_ALARM_BUTTON_DOWN:
             if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
