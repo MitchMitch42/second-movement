@@ -37,8 +37,9 @@
 
 // Date 0x4358C05B (2026-11-06), time 0x598800E1 (00:08:38).
 // The first packet requests a following packet; each bit is repeated eight times.
-bool sample_array[] = {
+bool debug_sample_array[] = {
     1, 1, 1, 1, 1, 1, 1, 1, // 0: start bit (1)
+
     0, 0, 0, 0, 0, 0, 0, 0, // 1: 0 (0x4)
     1, 1, 1, 1, 1, 1, 1, 1, // 2: 1
     0, 0, 0, 0, 0, 0, 0, 0, // 3: 0
@@ -71,22 +72,26 @@ bool sample_array[] = {
     0, 0, 0, 0, 0, 0, 0, 0, // 30: 0
     1, 1, 1, 1, 1, 1, 1, 1, // 31: 1
     1, 1, 1, 1, 1, 1, 1, 1, // 32: 1
-    0, 0, 0, 0, 0, 0, 0, 0, // 33: 0 (0x5)
-    1, 1, 1, 1, 1, 1, 1, 1, // 34: 1
-    0, 0, 0, 0, 0, 0, 0, 0, // 35: 0
-    1, 1, 1, 1, 1, 1, 1, 1, // 36: 1
-    1, 1, 1, 1, 1, 1, 1, 1, // 37: 1 (0x9)
-    0, 0, 0, 0, 0, 0, 0, 0, // 38: 0
-    0, 0, 0, 0, 0, 0, 0, 0, // 39: 0
-    1, 1, 1, 1, 1, 1, 1, 1, // 40: 1
-    1, 1, 1, 1, 1, 1, 1, 1, // 41: 1 (0x8)
-    0, 0, 0, 0, 0, 0, 0, 0, // 42: 0
-    0, 0, 0, 0, 0, 0, 0, 0, // 43: 0
+
+    0, 0, 0, 0, 0, 0, 0, 0, // 0: stop bit (0)
+    1, 1, 1, 1, 1, 1, 1, 1, // 0: start bit (1)
+
+    0, 0, 0, 0, 0, 0, 0, 0, // 1: 0 (0x5)
+    1, 1, 1, 1, 1, 1, 1, 1, // 2: 1
+    0, 0, 0, 0, 0, 0, 0, 0, // 3: 0
+    1, 1, 1, 1, 1, 1, 1, 1, // 4: 1
+    1, 1, 1, 1, 1, 1, 1, 1, // 5: 1 (0x9)
+    0, 0, 0, 0, 0, 0, 0, 0, // 40: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 41: 0
+    1, 1, 1, 1, 1, 1, 1, 1, // 42: 1
+    1, 1, 1, 1, 1, 1, 1, 1, // 43: 1 (0x8)
     0, 0, 0, 0, 0, 0, 0, 0, // 44: 0
-    1, 1, 1, 1, 1, 1, 1, 1, // 45: 1 (0x8)
+    0, 0, 0, 0, 0, 0, 0, 0, // 45: 0
     0, 0, 0, 0, 0, 0, 0, 0, // 46: 0
-    0, 0, 0, 0, 0, 0, 0, 0, // 47: 0
+    1, 1, 1, 1, 1, 1, 1, 1, // 47: 1 (0x8)
     0, 0, 0, 0, 0, 0, 0, 0, // 48: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 49: 0
+    0, 0, 0, 0, 0, 0, 0, 0, // 50: 0
     0, 0, 0, 0, 0, 0, 0, 0, // 49: 0 (0x0)
     0, 0, 0, 0, 0, 0, 0, 0, // 50: 0
     0, 0, 0, 0, 0, 0, 0, 0, // 51: 0
@@ -105,7 +110,7 @@ bool sample_array[] = {
     1, 1, 1, 1, 1, 1, 1, 1  // 64: 1
 };
 
-size_t blink_receiver_idx = 0;
+size_t blink_receiver_debug_idx = 0;
 
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
     (void) watch_face_index;
@@ -137,7 +142,7 @@ uint16_t blink_receiver_read_sensor(void) {
     adc_enable();
     uint16_t ret= adc_get_analog_value(HAL_GPIO_IRSENSE_pin());
     if (BR_DEBUG) {
-        ret = sample_array[blink_receiver_idx++ % (sizeof(sample_array) / sizeof(sample_array[0]))]
+        ret = debug_sample_array[blink_receiver_debug_idx++ % (sizeof(debug_sample_array) / sizeof(debug_sample_array[0]))]
             ? 0 : UINT16_MAX;
     }
     adc_disable();
@@ -270,7 +275,7 @@ void blink_receiver_handle_dateset(uint32_t packet)
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
 
     char outputString2[3];
-    snprintf(outputString2, 3, "%02d", data.date.day);
+    snprintf(outputString2, 3, "%2d", data.date.day);
     watch_display_string(outputString2, 2);
 
     snprintf(outputString2, 3, "%02d", data.date.month);
@@ -371,19 +376,16 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
 
             if (waiting_for_start) {
                 if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
-                    //enough bright samples detected: transmission has started
+                    //enough bright samples detected: transmission of package has started
                     state->bits_received = 0;
-                    state->current_package = 0;
-                    for (int i = 0; i < MAX_PACKAGE_COUNT; i++) {
-                        state->data[i] = 0;
-                    }
+                    state->data[state->current_package] = 0;
                     for (int i = 0; i < BITS_PER_PACKAGE; i++) {
                         state->sample_history[i] = 0;
                     }
                     state->mode = BLINK_RECEIVER_MODE_RECORD;
                 }
             } else {
-                //start signal received: record the next 32 bit (32*samples_per_bit samples)
+                //start signal received: record the next packet (32 bit, 32*samples_per_bit samples)
                 state->sample_history[state->bits_received] =
                     blink_receiver_pack_samples(state->samples_per_bit, state->samples);
                 state->data[state->current_package] = state->data[state->current_package] << 1;
@@ -397,6 +399,7 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                         //another package is coming
                         state->bits_received = 0;
                         state->current_package++;
+                        state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
                     } else {
                         //transmission complete
                         state->mode = BLINK_RECEIVER_MODE_IDLE;
@@ -415,7 +418,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_ACTIVATE:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
-            state->samples_received = 0;
             state->last_second = 62;
             state->mode = BLINK_RECEIVER_MODE_CALC;         
             break;
@@ -455,9 +457,10 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     // start listening
                     //watch_buzzer_play_note(BUZZER_NOTE_E5, 100);
                     state->samples_received = 0;
+                    state->current_package = 0;
                     state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
                     watch_display_string("        ", 2);
-                    blink_receiver_idx = 0;
+                    blink_receiver_debug_idx = 0;
                     break;
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:
                 case BLINK_RECEIVER_MODE_RECORD:
