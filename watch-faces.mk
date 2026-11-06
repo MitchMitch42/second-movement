@@ -60,7 +60,6 @@ SRCS += \
   ./watch-faces/clock/solar_time_face.c \
   ./watch-faces/complication/tide_face.c \
   ./watch-faces/clock/world_clock2_face.c \
-  ./watch-faces/sensor/blink_receiver_face.c \
   ./watch-faces/complication/tamagotchi_face.c \
   ./watch-faces/sensor/temperature_prediction_face.c \
   ./watch-faces/demo/easteregg_face.c \
