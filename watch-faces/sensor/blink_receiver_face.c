@@ -33,7 +33,7 @@
 
 //#ifdef HAS_IR_SENSOR
 
-#define BR_DEBUG 1
+#define BR_DEBUG 0
 
 // Date 0x4358C05B (2026-11-06), time 0x598800E1 (00:08:38).
 // The first packet requests a following packet; each bit is repeated eight times.
@@ -183,6 +183,8 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
         case 0:
             state->frequency *= 2;
             if (state->frequency > MAX_FREQUENCY) state->frequency = 1;
+            movement_request_tick_frequency(state->frequency);
+            state->frequency_changed = true;
             break;
         case 1:
             state->samples_per_bit *= 2;
@@ -198,7 +200,14 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
 }
 
 static void blink_receiver_exit_settings(blink_receiver_state_t *state) {
-    state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
+    if (state->frequency_changed) {
+        state->mode = BLINK_RECEIVER_MODE_CALC;
+        state->last_second = 62;
+        state->tick_cnt = 0;
+        state->frequency_changed = false;
+    } else {
+        state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
+    }
     watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
 }
 
