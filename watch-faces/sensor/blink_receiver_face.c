@@ -183,7 +183,6 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
         case 0:
             state->frequency *= 2;
             if (state->frequency > MAX_FREQUENCY) state->frequency = 1;
-            movement_request_tick_frequency(state->frequency);
             state->frequency_changed = true;
             break;
         case 1:
@@ -204,6 +203,7 @@ static void blink_receiver_exit_settings(blink_receiver_state_t *state) {
         state->mode = BLINK_RECEIVER_MODE_CALC;
         state->last_second = 62;
         state->tick_cnt = 0;
+        movement_request_tick_frequency(state->frequency);
         state->frequency_changed = false;
     } else {
         state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
