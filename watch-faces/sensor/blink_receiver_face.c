@@ -246,6 +246,16 @@ uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_
     return (uint8_t)(sum & 0xFF);
 }
 
+void blink_receiver_handle_heartbeat(uint16_t ms) {
+    if (ms > 0) {
+        watch_rtc_enable(false);
+        delay_ms(ms); // delay clock
+        watch_rtc_enable(true);
+    }
+
+    movement_set_utc_timestamp(movement_get_utc_timestamp() + 1);
+}
+
 //set local time to received timestamp
 void blink_receiver_handle_timeset(uint32_t packet)
 {
