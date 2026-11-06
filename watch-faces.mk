@@ -65,4 +65,5 @@ SRCS += \
   ./watch-faces/sensor/temperature_prediction_face.c \
   ./watch-faces/demo/easteregg_face.c \
   ./watch-faces/complication/workout_face.c \
+  ./watch-faces/sensor/blink_receiver_face.c \
 # New watch faces go above this line.

@@ -33,24 +33,88 @@
  *
  */
 
+#define DEFAULT_LIGHT_LEVEL_BORDER 65200
+#define MIN_LIGHT_LEVEL_BORDER 65100
+#define MAX_LIGHT_LEVEL_BORDER 65500
+#define LIGHT_LEVEL_BORDER_STEP 10
+
+#define DEFAULT_SAMPLES_PER_BIT 8
+#define MAX_SAMPLES_PER_BIT 16
+
+#define DEFAULT_FREQUENCY 64
+#define MAX_FREQUENCY 64
+
+#define BITS_PER_PACKAGE 32
+#define MAX_PACKAGE_COUNT 4
+
+#define BLINK_RECEIVER_HEADER_TIMESET 1
+#define BLINK_RECEIVER_HEADER_DATESET 2
+#define BLINK_RECEIVER_HEADER_TIMESET_EXACT 3
+#define BLINK_RECEIVER_HEADER_MULTIPLE_PACKETS 4
+#define BLINK_RECEIVER_HEADER_DATETIME 5
+#define BLINK_RECEIVER_HEADER_DATETIME_EXACT 6
+
 typedef enum {
   BLINK_RECEIVER_MODE_IDLE,
   BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT,
   BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE,
   BLINK_RECEIVER_MODE_RECORD,
-  BLINK_RECEIVER_MODE_CALC
+  BLINK_RECEIVER_MODE_CALC,
+  BLINK_RECEIVER_MODE_SETTING,
+  BLINK_RECEIVER_MODE_HISTORY
 } blink_receiver_mode;
 
+typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t unused : 3;
+        uint32_t hour : 5;
+        uint32_t minute : 6;
+        uint32_t second : 6;
+        uint32_t header : 4;
+    } time;
+    uint32_t reg;
+} blink_receiver_packet_time_t;
+
+typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t unused : 5;
+        uint32_t year : 6;
+        uint32_t month : 4;
+        uint32_t day : 5;
+        uint32_t header : 4;
+    } date;
+    uint32_t reg;
+} blink_receiver_packet_date_t;
+
+typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t byte_3 : 8;
+        uint32_t byte_2 : 8;
+        uint32_t byte_1 : 8; //4 bits header + 4 bits data
+    } bytes;
+    uint32_t reg;
+} blink_receiver_packet_data_t;
+
 typedef struct {
+    blink_receiver_mode mode; 
+
     uint16_t light_level_border;
     uint8_t frequency;
-    uint8_t frequency_rising_edge;
-    uint32_t data;
+    uint8_t samples_per_bit;
+    bool frequency_changed;
+
+    bool *samples;
+    uint16_t *sample_history;
+    uint32_t *data;
+    uint8_t samples_received; 
     int16_t bits_received;  
-    uint16_t light_level; 
-    blink_receiver_mode mode; 
-    uint16_t pollCnt;
-    uint32_t packets[6];
+    uint8_t current_package;
+    uint8_t settings_state;
+    uint8_t history_position;
+
     uint8_t tick_cnt;
     uint32_t last_second;
 } blink_receiver_state_t;
