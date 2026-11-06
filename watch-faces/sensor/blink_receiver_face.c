@@ -120,7 +120,7 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         blink_receiver_state_t *state = (blink_receiver_state_t *) *context_ptr;
 
         state->samples = malloc(MAX_SAMPLES_PER_BIT * sizeof(*state->samples));
-        state->sample_history = malloc(BITS_PER_PACKAGE * sizeof(*state->sample_history));
+        state->sample_history = malloc((BITS_PER_PACKAGE + 1) * sizeof(*state->sample_history));
         state->data = malloc(MAX_PACKAGE_COUNT * sizeof(uint32_t));
         state->light_level_border = DEFAULT_LIGHT_LEVEL_BORDER; 
         state->samples_per_bit = DEFAULT_SAMPLES_PER_BIT;
@@ -211,7 +211,7 @@ static void blink_receiver_display_history(blink_receiver_state_t *state) {
         ? state->samples_per_bit - sample_start : 0;
     if (visible_samples > 8) visible_samples = 8;
 
-    snprintf(buf + 2, 3, "%2u", (unsigned)(bit_index + 1));
+    snprintf(buf + 2, 3, "%2u", (unsigned)bit_index);
     for (uint8_t i = 0; i < visible_samples; i++) {
         uint8_t sample_index = sample_start + i;
         uint8_t shift = state->samples_per_bit - sample_index - 1;
@@ -222,7 +222,7 @@ static void blink_receiver_display_history(blink_receiver_state_t *state) {
 }
 
 static void blink_receiver_move_history(blink_receiver_state_t *state, int8_t direction) {
-    uint8_t history_length = BITS_PER_PACKAGE * (state->samples_per_bit > 8 ? 2 : 1);
+    uint8_t history_length = (BITS_PER_PACKAGE + 1) * (state->samples_per_bit > 8 ? 2 : 1);
     state->history_position = (state->history_position + history_length + direction) % history_length;
     blink_receiver_display_history(state);
 }
@@ -379,14 +379,16 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                     //enough bright samples detected: transmission of package has started
                     state->bits_received = 0;
                     state->data[state->current_package] = 0;
-                    for (int i = 0; i < BITS_PER_PACKAGE; i++) {
+                    for (int i = 0; i <= BITS_PER_PACKAGE; i++) {
                         state->sample_history[i] = 0;
                     }
+                    state->sample_history[0] =
+                        blink_receiver_pack_samples(state->samples_per_bit, state->samples);
                     state->mode = BLINK_RECEIVER_MODE_RECORD;
                 }
             } else {
                 //start signal received: record the next packet (32 bit, 32*samples_per_bit samples)
-                state->sample_history[state->bits_received] =
+                state->sample_history[state->bits_received + 1] =
                     blink_receiver_pack_samples(state->samples_per_bit, state->samples);
                 state->data[state->current_package] = state->data[state->current_package] << 1;
                 if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
