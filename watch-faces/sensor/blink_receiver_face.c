@@ -323,25 +323,27 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data) {
     blink_receiver_packet_data_t packet = { .reg = data };
     uint8_t checksum = blink_receiver_calculate_checksum(packet.bytes.byte_1, packet.bytes.byte_2, packet.bytes.byte_3);
     if (checksum == packet.bytes.checksum) {
-        switch(packet.bytes.byte_1 >> 4) { //header is the first 4 bits
-            case BLINK_RECEIVER_HEADER_TIMESET:     
-                blink_receiver_handle_timeset(data);
-                break;
-            case BLINK_RECEIVER_HEADER_DATESET:
-                blink_receiver_handle_dateset(data); // date received
-                break;
-            case BLINK_RECEIVER_HEADER_DATETIME:
-                blink_receiver_handle_datetimeset(state->data[0], state->data[1]);
-                break;
-            case BLINK_RECEIVER_HEADER_MULTIPLE_PACKETS:
-                if (state->current_package + 1 < MAX_PACKAGE_COUNT) {
-                    watch_display_text(WATCH_POSITION_TOP_LEFT, "PA"); //one of multiple packages received
-                    return true;
-                } else {
-                    watch_display_text(WATCH_POSITION_TOP_LEFT, "PO"); // too many packages
+        if (packet.header.multipacket) {
+            if (state->current_package + 1 < MAX_PACKAGE_COUNT) {
+                watch_display_text(WATCH_POSITION_TOP_LEFT, "MU"); //one of multiple packages received
+                return true;
+            } else {
+                watch_display_text(WATCH_POSITION_TOP_LEFT, "M_"); // too many packages
+            }
+        } else {
+            for (uint8_t i = 0; i <= state->current_package; i++) {
+                packet = { .reg = state->data[i] };
+                switch(packet.header.type) {
+                    case BLINK_RECEIVER_HEADER_TIMESET:     
+                        blink_receiver_handle_timeset(data);
+                        break;
+                    case BLINK_RECEIVER_HEADER_DATESET:
+                        blink_receiver_handle_dateset(data); // date received
+                        break;
+                    default: 
+                        watch_display_text(WATCH_POSITION_TOP_LEFT, "__"); // unknown header
                 }
-            default: 
-                watch_display_text(WATCH_POSITION_TOP_LEFT, "__"); // unknown header
+            }
         }
     } else {
         //wrong checksum
