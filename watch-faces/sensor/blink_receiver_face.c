@@ -174,7 +174,6 @@ static void blink_receiver_display_settings(blink_receiver_state_t *state) {
             watch_display_string(buf, 4);
             break;
         default:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
             break;
     }
 }
@@ -200,6 +199,7 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
 
 static void blink_receiver_exit_settings(blink_receiver_state_t *state) {
     state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
+    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
 }
 
 static void blink_receiver_display_history(blink_receiver_state_t *state) {
@@ -264,7 +264,6 @@ void blink_receiver_handle_timeset(bool exact, uint32_t packet, uint8_t tick_cnt
     watch_display_string(outputString2, 6);
     snprintf(outputString2, 3, "%02d", data.time.second);
     watch_display_string(outputString2, 8);
-    watch_set_colon();
 }
 
 //set local date to received date
@@ -520,8 +519,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 } else {
                     blink_receiver_display_settings(state);
                 }
-            } else {
-                movement_illuminate_led();
             }
             break;
         case EVENT_LIGHT_BUTTON_UP:
