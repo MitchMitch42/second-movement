@@ -446,7 +446,7 @@ void movement_illuminate_led(void) {
     if (movement_state.settings.bit.led_duration != 0b111) {
         movement_state.light_on = true;
         if (movement_state.led_is_permanently_on) {
-            watch_set_led_color_rgb(0, 255, 0); //brightest color for torch mode
+            watch_set_led_color_rgb(0, 255, 255); //brightest color for torch mode
         } else {
             watch_set_led_color_rgb(movement_state.settings.bit.led_red_color | movement_state.settings.bit.led_red_color << 4,
                                     movement_state.settings.bit.led_green_color | movement_state.settings.bit.led_green_color << 4,
