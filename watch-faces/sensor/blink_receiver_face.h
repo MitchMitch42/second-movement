@@ -49,17 +49,14 @@
 
 #define BLINK_RECEIVER_HEADER_TIMESET 1
 #define BLINK_RECEIVER_HEADER_DATESET 2
-#define BLINK_RECEIVER_HEADER_TIMESET_EXACT 3
 #define BLINK_RECEIVER_HEADER_MULTIPLE_PACKETS 4
 #define BLINK_RECEIVER_HEADER_DATETIME 5
-#define BLINK_RECEIVER_HEADER_DATETIME_EXACT 6
 
 typedef enum {
   BLINK_RECEIVER_MODE_IDLE,
   BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT,
   BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE,
   BLINK_RECEIVER_MODE_RECORD,
-  BLINK_RECEIVER_MODE_CALC,
   BLINK_RECEIVER_MODE_SETTING,
   BLINK_RECEIVER_MODE_HISTORY
 } blink_receiver_mode;
@@ -115,8 +112,6 @@ typedef struct {
     uint8_t settings_state;
     uint8_t history_position;
 
-    uint8_t tick_cnt;
-    uint32_t last_second;
 } blink_receiver_state_t;
 
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr);
