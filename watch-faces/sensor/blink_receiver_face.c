@@ -200,14 +200,10 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
 
 static void blink_receiver_exit_settings(blink_receiver_state_t *state) {
     if (state->frequency_changed) {
-        state->mode = BLINK_RECEIVER_MODE_CALC;
-        state->last_second = 62;
-        state->tick_cnt = 0;
         movement_request_tick_frequency(state->frequency);
         state->frequency_changed = false;
-    } else {
-        state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
     }
+    state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
     watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
 }
 
@@ -251,10 +247,10 @@ uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_
 }
 
 //set local time to received timestamp
-void blink_receiver_handle_timeset(bool exact, uint32_t packet, uint8_t tick_cnt, uint8_t frequency)
+void blink_receiver_handle_timeset(uint32_t packet)
 {
     blink_receiver_packet_time_t data = { .reg = packet };
-    watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "TE" : "TI");
+    watch_display_text(WATCH_POSITION_TOP_LEFT, "TI");
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
     watch_display_text(WATCH_POSITION_BOTTOM, "      ");
     
@@ -263,8 +259,7 @@ void blink_receiver_handle_timeset(bool exact, uint32_t packet, uint8_t tick_cnt
     date_time.unit.minute = data.time.minute;
     date_time.unit.hour = data.time.hour;
 
-    if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)tick_cnt * 1000.0) / (double)frequency) + 0.5));
-    else movement_set_local_date_time(date_time);
+    movement_set_local_date_time(date_time);
 
     char outputString2[3];
     snprintf(outputString2, 3, "%02d", data.time.hour);
@@ -302,11 +297,11 @@ void blink_receiver_handle_dateset(uint32_t packet)
 }
 
 //set local date to received date and set local time to received timestamp
-void blink_receiver_handle_datetimeset(bool exact, uint32_t data1, uint32_t data2, uint8_t tick_cnt, uint8_t frequency)
+void blink_receiver_handle_datetimeset(uint32_t data1, uint32_t data2)
 {
-    blink_receiver_handle_timeset(exact, data2, tick_cnt, frequency);
+    blink_receiver_handle_timeset(data2);
     blink_receiver_handle_dateset(data1);
-    watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "AE" : "AI");
+    watch_display_text(WATCH_POSITION_TOP_LEFT, "AI");
 }
 
 // Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
@@ -320,19 +315,13 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data) {
     if (checksum == packet.bytes.checksum) {
         switch(packet.bytes.byte_1 >> 4) { //header is the first 4 bits
             case BLINK_RECEIVER_HEADER_TIMESET:     
-                blink_receiver_handle_timeset(false, data, state->tick_cnt, state->frequency); // timestamp received
-                break;
-            case BLINK_RECEIVER_HEADER_TIMESET_EXACT:
-                blink_receiver_handle_timeset(true, data, state->tick_cnt, state->frequency); // exact timestamp received (ms == 0)
+                blink_receiver_handle_timeset(data);
                 break;
             case BLINK_RECEIVER_HEADER_DATESET:
                 blink_receiver_handle_dateset(data); // date received
                 break;
             case BLINK_RECEIVER_HEADER_DATETIME:
-                blink_receiver_handle_datetimeset(false, state->data[0], state->data[1], state->tick_cnt, state->frequency); // date and timestamp received
-                break;
-            case BLINK_RECEIVER_HEADER_DATETIME_EXACT:
-                blink_receiver_handle_datetimeset(true, state->data[0], state->data[1], state->tick_cnt, state->frequency); // date and exact timestamp received (ms == 0)
+                blink_receiver_handle_datetimeset(state->data[0], state->data[1]);
                 break;
             case BLINK_RECEIVER_HEADER_MULTIPLE_PACKETS:
                 if (state->current_package + 1 < MAX_PACKAGE_COUNT) {
@@ -428,11 +417,9 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             break;
         case EVENT_ACTIVATE:
             watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
-            state->last_second = 62;
-            state->mode = BLINK_RECEIVER_MODE_CALC;         
+            state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
             break;
         case EVENT_TICK:
-            state->tick_cnt = (state->tick_cnt + 1) % state->frequency;        
             switch (state->mode) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
                     // starting state: show current light value          
@@ -445,16 +432,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 case BLINK_RECEIVER_MODE_RECORD:     
                     blink_receiver_read_sample(false, state);
                     break;
-                case BLINK_RECEIVER_MODE_CALC:
-                    watch_display_text(WATCH_POSITION_BOTTOM, "CALC"); 
-                    if (state->last_second == 62) {
-                        state->last_second = movement_get_local_date_time().unit.second;
-                    }
-                    else if (movement_get_local_date_time().unit.second != state->last_second) {
-                        state->tick_cnt = 0;
-                        state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
-                    }
-                    break;     
                 default: //IDLE and SETTINGS and HISTORY
                     break;
             }
