@@ -298,7 +298,7 @@ void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond) {
 }
 
 //set local time to received timestamp
-void blink_receiver_handle_timeset(uint32_t packet)
+void blink_receiver_handle_timeset(uint32_t packet, uint16_t subsecond, uint8_t frequency)
 {
     blink_receiver_packet_time_t data = { .reg = packet };
     watch_display_text(WATCH_POSITION_TOP_LEFT, "TI");
@@ -311,13 +311,16 @@ void blink_receiver_handle_timeset(uint32_t packet)
     date_time.unit.hour = data.time.hour;
 
     movement_set_local_date_time(date_time);
+    if ((uint32_t)subsecond * 2 > frequency) {
+        movement_set_utc_timestamp(movement_get_utc_timestamp() + 1);
+    }
 
     char outputString2[3];
-    snprintf(outputString2, 3, "%02d", data.time.hour);
+    snprintf(outputString2, 3, "%02d", date_time.unit.hour);
     watch_display_string(outputString2, 4);
-    snprintf(outputString2, 3, "%02d", data.time.minute);
+    snprintf(outputString2, 3, "%02d", date_time.unit.minute);
     watch_display_string(outputString2, 6);
-    snprintf(outputString2, 3, "%02d", data.time.second);
+    snprintf(outputString2, 3, "%02d", date_time.unit.second);
     watch_display_string(outputString2, 8);
 }
 
@@ -348,10 +351,10 @@ void blink_receiver_handle_dateset(uint32_t packet)
 }
 
 //set local date to received date and set local time to received timestamp
-void blink_receiver_handle_datetimeset(uint32_t data1, uint32_t data2)
+void blink_receiver_handle_datetimeset(uint32_t data1, uint32_t data2, uint16_t subsecond, uint8_t frequency)
 {
-    blink_receiver_handle_timeset(data2);
     blink_receiver_handle_dateset(data1);
+    blink_receiver_handle_timeset(data2, subsecond, frequency);
     watch_display_text(WATCH_POSITION_TOP_LEFT, "TD");
 }
 
@@ -378,7 +381,7 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                 packet.reg = state->data[i];
                 switch(packet.header.type) {
                     case BLINK_RECEIVER_HEADER_TIMESET:     
-                        blink_receiver_handle_timeset(state->data[i]);
+                        blink_receiver_handle_timeset(state->data[i], subsecond, state->frequency);
                         break;
                     case BLINK_RECEIVER_HEADER_DATESET:
                         blink_receiver_handle_dateset(state->data[i]);
