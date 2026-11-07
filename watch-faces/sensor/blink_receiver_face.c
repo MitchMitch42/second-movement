@@ -406,7 +406,7 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MU"); //one of multiple packages received
                 return true;
             } else {
-                watch_display_text(WATCH_POSITION_TOP_LEFT, "EM"); // too many packages
+                watch_display_text(WATCH_POSITION_TOP_LEFT, "MM"); // too many packages
                 pass = false;
             }
         } else {
@@ -430,7 +430,7 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                         break;
                     case BLINK_RECEIVER_HEADER_SET_ZONE:
                         if (!blink_receiver_handle_zone(state->data[i])) {
-                            watch_display_text(WATCH_POSITION_TOP_LEFT, "EZ"); // unknown zone
+                            watch_display_text(WATCH_POSITION_TOP_LEFT, "MZ"); // unknown zone
                             pass = false;
                         }
                         break;
@@ -438,7 +438,7 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                         watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
                         break;
                     default: 
-                        watch_display_text(WATCH_POSITION_TOP_LEFT, "EH"); // unknown header
+                        watch_display_text(WATCH_POSITION_TOP_LEFT, "MH"); // unknown header
                         pass = false;
                         break;
                 }
