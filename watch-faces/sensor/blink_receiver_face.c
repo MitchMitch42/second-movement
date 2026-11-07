@@ -33,6 +33,24 @@
 
 //#ifdef HAS_IR_SENSOR
 
+// Descending two-tone fail sound
+static int8_t fail_sound[] = {
+    BUZZER_NOTE_E5, 6,
+    BUZZER_NOTE_REST, 2,
+    BUZZER_NOTE_C4, 12,
+    0
+};
+
+// Ascending three-tone triumph sound
+static int8_t triumph_sound[] = {
+    BUZZER_NOTE_C5, 4,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_E5, 4,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_G6, 8,
+    0
+};
+
 #define BR_DEBUG 0
 
 // Each data bit is sampled eight times. The first packet requests a following packet.
@@ -332,7 +350,8 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
     char outputString9[9];
     snprintf(outputString9, 9, "%08x", data);
     watch_display_string(outputString9, 2);
-    
+
+    bool pass = true;
     blink_receiver_packet_data_t packet = { .reg = data };
     uint8_t checksum = blink_receiver_calculate_checksum(packet.bytes.byte_1, packet.bytes.byte_2, packet.bytes.byte_3);
     if (checksum == packet.bytes.checksum) {
@@ -342,6 +361,7 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                 return true;
             } else {
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "EM"); // too many packages
+                pass = false;
             }
         } else {
             for (uint8_t i = 0; i <= state->current_package; i++) {
@@ -358,14 +378,23 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                         break;
                     default: 
                         watch_display_text(WATCH_POSITION_TOP_LEFT, "EH"); // unknown header
+                        pass = false;
+                        break;
                 }
             }
         }
     } else {
         //wrong checksum
+        pass = false;
         char outputString[3];
         snprintf(outputString, 3, "%02x", checksum);
         watch_display_text(WATCH_POSITION_TOP_LEFT, outputString);
+    }
+    
+    if (pass) {
+        movement_play_sequence(triumph_sound, BUZZER_PRIORITY_ALARM);
+    } else {
+        movement_play_sequence(fail_sound, BUZZER_PRIORITY_ALARM);
     }
 
     return false;
