@@ -39,27 +39,23 @@
 #define LIGHT_LEVEL_BORDER_STEP 10
 
 #define DEFAULT_SAMPLES_PER_BIT 8
-#define MAX_SAMPLES_PER_BIT 16
+#define MAX_SAMPLES_PER_BIT 32
 
 #define DEFAULT_FREQUENCY 64
-#define MAX_FREQUENCY 64
+#define MAX_FREQUENCY 128
 
 #define BITS_PER_PACKAGE 32
-#define MAX_PACKAGE_COUNT 4
+#define MAX_PACKAGE_COUNT 8
 
 #define BLINK_RECEIVER_HEADER_TIMESET 1
 #define BLINK_RECEIVER_HEADER_DATESET 2
-#define BLINK_RECEIVER_HEADER_TIMESET_EXACT 3
-#define BLINK_RECEIVER_HEADER_MULTIPLE_PACKETS 4
-#define BLINK_RECEIVER_HEADER_DATETIME 5
-#define BLINK_RECEIVER_HEADER_DATETIME_EXACT 6
+#define BLINK_RECEIVER_HEADER_HEARTBEAT 3
 
 typedef enum {
   BLINK_RECEIVER_MODE_IDLE,
   BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT,
   BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE,
   BLINK_RECEIVER_MODE_RECORD,
-  BLINK_RECEIVER_MODE_CALC,
   BLINK_RECEIVER_MODE_SETTING,
   BLINK_RECEIVER_MODE_HISTORY
 } blink_receiver_mode;
@@ -93,30 +89,34 @@ typedef union {
         uint32_t checksum : 8;
         uint32_t byte_3 : 8;
         uint32_t byte_2 : 8;
-        uint32_t byte_1 : 8; //4 bits header + 4 bits data
+        uint32_t byte_1 : 8;
     } bytes;
+    struct {
+        uint32_t data : 28;
+        uint32_t type : 3;
+        uint32_t multipacket : 1;
+    } header;
     uint32_t reg;
 } blink_receiver_packet_data_t;
 
 typedef struct {
     blink_receiver_mode mode; 
 
+    uint8_t settings_state;
     uint16_t light_level_border;
     uint8_t frequency;
     uint8_t samples_per_bit;
     bool frequency_changed;
 
     bool *samples;
-    uint16_t *sample_history;
     uint32_t *data;
     uint8_t samples_received; 
     int16_t bits_received;  
     uint8_t current_package;
-    uint8_t settings_state;
+
+    uint16_t *sample_history;
     uint8_t history_position;
 
-    uint8_t tick_cnt;
-    uint32_t last_second;
 } blink_receiver_state_t;
 
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr);
