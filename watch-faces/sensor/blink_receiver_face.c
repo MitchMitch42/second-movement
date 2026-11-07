@@ -219,7 +219,7 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
             state->frequency = state->frequency * 2 > MAX_FREQUENCY ? 1 : state->frequency * 2;
             break;
         case 1:
-            if (samples_per_bit < 8) {
+            if (state->samples_per_bit < 8) {
                 state->samples_per_bit += 1;
             } else {
                 state->samples_per_bit *= 2;
@@ -235,7 +235,7 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
     }
 }
 
-static void blink_receiver_go_to_reading_state() {
+static void blink_receiver_go_to_reading_state(blink_receiver_state_t *state) {
     state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
     movement_request_tick_frequency(DISPLAY_CURRENT_LIGHT_FREQUENCY);
     watch_clear_display();
@@ -391,6 +391,40 @@ void blink_receiver_handle_dateset(uint32_t packet)
     movement_set_local_date_time(date_time);
 }
 
+bool blink_receiver_execute_packet(uint32_t data, uint16_t subsecond, uint8_t frequency) {
+    blink_receiver_packet_data_t packet = { .reg = data };
+    switch(packet.header.type) {
+        case BLINK_RECEIVER_HEADER_TIMESET:     
+            blink_receiver_handle_timeset(data, subsecond, frequency);
+            break;
+        case BLINK_RECEIVER_HEADER_DATESET:
+            blink_receiver_handle_dateset(data);
+            break;
+        case BLINK_RECEIVER_HEADER_HEARTBEAT:
+            blink_receiver_handle_heartbeat((uint16_t)((((double)subsecond * 1000.0) / (double)frequency) + 0.5), subsecond);
+            break;
+        case BLINK_RECEIVER_HEADER_LATITUDE:
+            blink_receiver_handle_location(data, true);
+            break;
+        case BLINK_RECEIVER_HEADER_LONGITUDE:
+            blink_receiver_handle_location(data, false);
+            break;
+        case BLINK_RECEIVER_HEADER_SET_ZONE:
+            if (!blink_receiver_handle_zone(data)) {
+                watch_display_text(WATCH_POSITION_TOP_LEFT, "MZ"); // unknown zone
+                return false;
+            }
+            break;
+        case BLINK_RECEIVER_HEADER_TEST:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
+            break;
+        default: 
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "MH"); // unknown header
+            return false;
+    }
+    return true;
+}
+
 // Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
 bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, uint16_t subsecond) {
     char outputString9[9];
@@ -404,44 +438,24 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
         if (packet.header.multipacket) {
             if (state->current_package + 1 < MAX_PACKAGE_COUNT) {
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MU"); //one of multiple packages received
-                return true;
+                if(packet.header.immediate) {
+                    // immediate packet: execute it right away
+                    pass = blink_receiver_execute_packet(data, subsecond, state->frequency);
+                    if(pass) {
+                        // if current packet was executed successfully, clear the current package
+                        state->current_package--;
+                    }
+                }
+                if(pass) {
+                    return true;
+                }   
             } else {
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MM"); // too many packages
                 pass = false;
             }
         } else {
             for (uint8_t i = 0; i <= state->current_package && pass; i++) {
-                packet.reg = state->data[i];
-                switch(packet.header.type) {
-                    case BLINK_RECEIVER_HEADER_TIMESET:     
-                        blink_receiver_handle_timeset(state->data[i], subsecond, state->frequency);
-                        break;
-                    case BLINK_RECEIVER_HEADER_DATESET:
-                        blink_receiver_handle_dateset(state->data[i]);
-                        break;
-                    case BLINK_RECEIVER_HEADER_HEARTBEAT:
-                        blink_receiver_handle_heartbeat((uint16_t)((((double)subsecond * 1000.0) / (double)state->frequency) + 0.5), subsecond);
-                        break;
-                    case BLINK_RECEIVER_HEADER_LATITUDE:
-                        blink_receiver_handle_location(state->data[i], true);
-                        break;
-                    case BLINK_RECEIVER_HEADER_LONGITUDE:
-                        blink_receiver_handle_location(state->data[i], false);
-                        break;
-                    case BLINK_RECEIVER_HEADER_SET_ZONE:
-                        if (!blink_receiver_handle_zone(state->data[i])) {
-                            watch_display_text(WATCH_POSITION_TOP_LEFT, "MZ"); // unknown zone
-                            pass = false;
-                        }
-                        break;
-                    case BLINK_RECEIVER_HEADER_TEST:
-                        watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
-                        break;
-                    default: 
-                        watch_display_text(WATCH_POSITION_TOP_LEFT, "MH"); // unknown header
-                        pass = false;
-                        break;
-                }
+                pass= blink_receiver_execute_packet(state->data[i], subsecond, state->frequency);
             }
         }
     } else {
@@ -535,7 +549,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
         case EVENT_NONE:
             break;
         case EVENT_ACTIVATE:
-            blink_receiver_go_to_reading_state();
+            blink_receiver_go_to_reading_state(state);
             break;
         case EVENT_TICK:
             switch (state->mode) {
@@ -572,7 +586,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 case BLINK_RECEIVER_MODE_RECORD:
                     // interrupt listening
                     //watch_buzzer_play_note(BUZZER_NOTE_E4, 200);
-                    blink_receiver_go_to_reading_state();
+                    blink_receiver_go_to_reading_state(state);
                     break;
                 default:
                     break;
@@ -581,7 +595,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
         case EVENT_ALARM_LONG_PRESS:
             if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
                 //exit history
-                blink_receiver_go_to_reading_state();
+                blink_receiver_go_to_reading_state(state);
             } else if (state->mode != BLINK_RECEIVER_MODE_SETTING
                 && state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE
                 && state->mode != BLINK_RECEIVER_MODE_RECORD) {
