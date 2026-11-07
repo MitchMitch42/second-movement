@@ -518,10 +518,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 break;
             } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
                 blink_receiver_exit_settings(state);
-            } else if (state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE && state->mode != BLINK_RECEIVER_MODE_RECORD) {
-                state->settings_state = 0;
-                state->mode = BLINK_RECEIVER_MODE_SETTING;
-                blink_receiver_display_settings(state);
             }
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
@@ -534,6 +530,10 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 } else {
                     blink_receiver_display_settings(state);
                 }
+            } else if (state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE && state->mode != BLINK_RECEIVER_MODE_RECORD) {
+                state->settings_state = 0;
+                state->mode = BLINK_RECEIVER_MODE_SETTING;
+                blink_receiver_display_settings(state);
             }
             break;
         case EVENT_LIGHT_BUTTON_UP:
