@@ -297,6 +297,19 @@ void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond) {
 
 }
 
+static void persist_location_to_filesystem(int16_t value, bool is_latitude) {
+    movement_location_t maybe_location = {0};
+    filesystem_read_file("location.u32", (char *) &maybe_location.reg, sizeof(movement_location_t));
+
+    movement_location_t new_location;
+    new_location.bit.latitude = is_latitude ? value : maybe_location.bit.latitude;
+    new_location.bit.longitude = !is_latitude ? value : maybe_location.bit.longitude;
+
+    if (new_location.reg != maybe_location.reg) {
+        filesystem_write_file("location.u32", (char *) &new_location.reg, sizeof(movement_location_t));
+    }
+}
+
 //set local time to received timestamp
 void blink_receiver_handle_timeset(uint32_t packet, uint16_t subsecond, uint8_t frequency)
 {
@@ -348,14 +361,6 @@ void blink_receiver_handle_dateset(uint32_t packet)
     date_time.unit.month = data.date.month;
     date_time.unit.year = data.date.year; 
     movement_set_local_date_time(date_time);
-}
-
-//set local date to received date and set local time to received timestamp
-void blink_receiver_handle_datetimeset(uint32_t data1, uint32_t data2, uint16_t subsecond, uint8_t frequency)
-{
-    blink_receiver_handle_dateset(data1);
-    blink_receiver_handle_timeset(data2, subsecond, frequency);
-    watch_display_text(WATCH_POSITION_TOP_LEFT, "TD");
 }
 
 // Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
