@@ -368,10 +368,10 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                 packet.reg = state->data[i];
                 switch(packet.header.type) {
                     case BLINK_RECEIVER_HEADER_TIMESET:     
-                        blink_receiver_handle_timeset(data);
+                        blink_receiver_handle_timeset(state->data[i]);
                         break;
                     case BLINK_RECEIVER_HEADER_DATESET:
-                        blink_receiver_handle_dateset(data); // date received
+                        blink_receiver_handle_dateset(state->data[i]);
                         break;
                     case BLINK_RECEIVER_HEADER_HEARTBEAT:
                         blink_receiver_handle_heartbeat((uint16_t)((((double)subsecond * 1000.0) / (double)state->frequency) + 0.5), subsecond);
