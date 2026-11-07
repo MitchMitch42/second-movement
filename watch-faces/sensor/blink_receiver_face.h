@@ -52,6 +52,7 @@
 #define BLINK_RECEIVER_HEADER_HEARTBEAT 3
 #define BLINK_RECEIVER_HEADER_LATITUDE 4
 #define BLINK_RECEIVER_HEADER_LONGITUDE 5
+#define BLINK_RECEIVER_HEADER_SET_ZONE 6
 
 typedef enum {
   BLINK_RECEIVER_MODE_IDLE,
@@ -83,6 +84,16 @@ typedef union {
     } location;
     uint32_t reg;
 } blink_receiver_packet_location_t;
+
+typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t unused : 14;
+        uint32_t index : 6;
+        uint32_t header : 4;
+    } zone;
+    uint32_t reg;
+} blink_receiver_packet_zone_t;
 
 typedef union {
     struct {
