@@ -54,7 +54,7 @@ static int8_t triumph_sound[] = {
     0
 };
 
-#define BR_DEBUG 1
+#define BR_DEBUG 0
 
 // Each data bit is sampled eight times. The first packet requests a following packet.
 // Packets: 0xA3D8C03B, 0x132370A6.
@@ -167,7 +167,6 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
 void blink_receiver_face_activate(void *context) {
     (void) context;
     blink_receiver_state_t *state = (blink_receiver_state_t *)context;
-    movement_request_tick_frequency(state->frequency);
 }
 
 uint16_t blink_receiver_read_sensor(void) {
@@ -218,10 +217,13 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
     switch (state->settings_state) {
         case 0:
             state->frequency = state->frequency * 2 > MAX_FREQUENCY ? 1 : state->frequency * 2;
-            state->frequency_changed = true;
             break;
         case 1:
-            state->samples_per_bit += 1;
+            if (samples_per_bit < 8) {
+                state->samples_per_bit += 1;
+            } else {
+                state->samples_per_bit *= 2;
+            }
             if (state->samples_per_bit > MAX_SAMPLES_PER_BIT) state->samples_per_bit = 1;
             break;
         case 2:
@@ -233,12 +235,9 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
     }
 }
 
-static void blink_receiver_exit_settings(blink_receiver_state_t *state) {
-    if (state->frequency_changed) {
-        movement_request_tick_frequency(state->frequency);
-        state->frequency_changed = false;
-    }
+static void blink_receiver_go_to_reading_state() {
     state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
+    movement_request_tick_frequency(DISPLAY_CURRENT_LIGHT_FREQUENCY);
     watch_clear_display();
     watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
 }
@@ -435,6 +434,9 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                             pass = false;
                         }
                         break;
+                    case BLINK_RECEIVER_HEADER_TEST:
+                        watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
+                        break;
                     default: 
                         watch_display_text(WATCH_POSITION_TOP_LEFT, "EH"); // unknown header
                         pass = false;
@@ -517,6 +519,7 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                         state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
                     } else {
                         //transmission complete
+                        movement_request_tick_frequency(DISPLAY_CURRENT_LIGHT_FREQUENCY);
                         state->mode = BLINK_RECEIVER_MODE_IDLE;
                     }
                 }
@@ -532,8 +535,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
         case EVENT_NONE:
             break;
         case EVENT_ACTIVATE:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
-            state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
+            blink_receiver_go_to_reading_state();
             break;
         case EVENT_TICK:
             switch (state->mode) {
@@ -564,14 +566,13 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
                     watch_display_string("  SCAN  ", 2);
                     blink_receiver_debug_idx = 0;
+                    movement_request_tick_frequency(state->frequency);
                     break;
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:
                 case BLINK_RECEIVER_MODE_RECORD:
                     // interrupt listening
                     //watch_buzzer_play_note(BUZZER_NOTE_E4, 200);
-                    state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
-                    watch_clear_display();
-                    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
+                    blink_receiver_go_to_reading_state();
                     break;
                 default:
                     break;
@@ -580,9 +581,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
         case EVENT_ALARM_LONG_PRESS:
             if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
                 //exit history
-                state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
-                watch_clear_display();
-                watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
+                blink_receiver_go_to_reading_state();
             } else if (state->mode != BLINK_RECEIVER_MODE_SETTING
                 && state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE
                 && state->mode != BLINK_RECEIVER_MODE_RECORD) {
@@ -604,7 +603,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
                 break;
             } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
-                blink_receiver_exit_settings(state);
+                blink_receiver_go_to_reading_state(state); // exit settings
             }
             break;
         case EVENT_LIGHT_BUTTON_DOWN:
@@ -613,7 +612,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
             } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
                 state->settings_state++;
                 if (state->settings_state > 2) {
-                    blink_receiver_exit_settings(state);
+                    blink_receiver_go_to_reading_state(state); // exit settings
                 } else {
                     blink_receiver_display_settings(state);
                 }
