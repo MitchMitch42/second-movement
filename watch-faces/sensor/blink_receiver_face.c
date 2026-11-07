@@ -186,7 +186,6 @@ static void blink_receiver_display_settings(blink_receiver_state_t *state) {
 static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
     switch (state->settings_state) {
         case 0:
-            state->frequency *= 2;
             state->frequency = state->frequency * 2 > MAX_FREQUENCY ? 1 : state->frequency * 2;
             state->frequency_changed = true;
             break;
