@@ -31,6 +31,8 @@
 #include "adc.h"
 #include "watch.h"
 #include "filesystem.h"
+#include "watch_utility.h"
+#include "zones.h"
 
 //#ifdef HAS_IR_SENSOR
 
@@ -323,6 +325,20 @@ static void blink_receiver_handle_location(uint32_t packet, bool is_latitude) {
     watch_display_text(WATCH_POSITION_BOTTOM, buf);
 }
 
+static bool blink_receiver_handle_zone(uint32_t packet) {
+    blink_receiver_packet_zone_t zone_packet = { .reg = packet };
+    if (zone_packet.zone.index >= NUM_ZONE_NAMES) {
+        return false;
+    }
+
+    movement_set_timezone_index(zone_packet.zone.index);
+    movement_store_settings();
+    watch_display_text(WATCH_POSITION_TOP_LEFT, "ZN");
+    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+    watch_display_text(WATCH_POSITION_BOTTOM, (char *)watch_utility_time_zone_name_at_index(zone_packet.zone.index));
+    return true;
+}
+
 //set local time to received timestamp
 void blink_receiver_handle_timeset(uint32_t packet, uint16_t subsecond, uint8_t frequency)
 {
@@ -395,7 +411,7 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                 pass = false;
             }
         } else {
-            for (uint8_t i = 0; i <= state->current_package; i++) {
+            for (uint8_t i = 0; i <= state->current_package && pass; i++) {
                 packet.reg = state->data[i];
                 switch(packet.header.type) {
                     case BLINK_RECEIVER_HEADER_TIMESET:     
@@ -412,6 +428,12 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                         break;
                     case BLINK_RECEIVER_HEADER_LONGITUDE:
                         blink_receiver_handle_location(state->data[i], false);
+                        break;
+                    case BLINK_RECEIVER_HEADER_SET_ZONE:
+                        if (!blink_receiver_handle_zone(state->data[i])) {
+                            watch_display_text(WATCH_POSITION_TOP_LEFT, "EZ"); // unknown zone
+                            pass = false;
+                        }
                         break;
                     default: 
                         watch_display_text(WATCH_POSITION_TOP_LEFT, "EH"); // unknown header
