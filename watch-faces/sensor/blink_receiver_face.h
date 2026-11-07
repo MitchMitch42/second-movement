@@ -75,6 +75,26 @@ typedef union {
 typedef union {
     struct {
         uint32_t checksum : 8;
+        uint32_t unused : 4;
+        uint32_t value : 16;
+        uint32_t header : 4;
+    } latitude;
+    uint32_t reg;
+} blink_receiver_packet_latitude_t;
+
+typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t unused : 4;
+        uint32_t value : 16;
+        uint32_t header : 4;
+    } longitude;
+    uint32_t reg;
+} blink_receiver_packet_longitude_t;
+
+typedef union {
+    struct {
+        uint32_t checksum : 8;
         uint32_t unused : 5;
         uint32_t year : 6;
         uint32_t month : 4;
