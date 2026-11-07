@@ -30,6 +30,7 @@
 #include "usb.h"
 #include "adc.h"
 #include "watch.h"
+#include "filesystem.h"
 
 //#ifdef HAS_IR_SENSOR
 
@@ -297,7 +298,10 @@ void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond) {
 
 }
 
-static void persist_location_to_filesystem(int16_t value, bool is_latitude) {
+static void blink_receiver_handle_location(uint32_t packet, bool is_latitude) {
+    blink_receiver_packet_location_t location_packet = { .reg = packet };
+    int16_t value = (int16_t)location_packet.location.value;
+
     movement_location_t maybe_location = {0};
     filesystem_read_file("location.u32", (char *) &maybe_location.reg, sizeof(movement_location_t));
 
@@ -393,6 +397,12 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                         break;
                     case BLINK_RECEIVER_HEADER_HEARTBEAT:
                         blink_receiver_handle_heartbeat((uint16_t)((((double)subsecond * 1000.0) / (double)state->frequency) + 0.5), subsecond);
+                        break;
+                    case BLINK_RECEIVER_HEADER_LATITUDE:
+                        blink_receiver_handle_location(state->data[i], true);
+                        break;
+                    case BLINK_RECEIVER_HEADER_LONGITUDE:
+                        blink_receiver_handle_location(state->data[i], false);
                         break;
                     default: 
                         watch_display_text(WATCH_POSITION_TOP_LEFT, "EH"); // unknown header
