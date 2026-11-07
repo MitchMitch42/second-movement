@@ -66,11 +66,11 @@ typedef enum {
 typedef union {
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 3;
+        uint32_t unused : 2;
         uint32_t hour : 5;
         uint32_t minute : 6;
         uint32_t second : 6;
-        uint32_t header : 4;
+        uint32_t header : 5;
     } time;
     uint32_t reg;
 } blink_receiver_packet_time_t;
@@ -78,9 +78,9 @@ typedef union {
 typedef union {
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 4;
+        uint32_t unused : 3;
         uint32_t value : 16;
-        uint32_t header : 4;
+        uint32_t header : 5;
     } location;
     uint32_t reg;
 } blink_receiver_packet_location_t;
@@ -88,9 +88,9 @@ typedef union {
 typedef union {
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 14;
+        uint32_t unused : 13;
         uint32_t index : 6;
-        uint32_t header : 4;
+        uint32_t header : 5;
     } zone;
     uint32_t reg;
 } blink_receiver_packet_zone_t;
@@ -98,11 +98,11 @@ typedef union {
 typedef union {
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 5;
+        uint32_t unused : 4;
         uint32_t year : 6;
         uint32_t month : 4;
         uint32_t day : 5;
-        uint32_t header : 4;
+        uint32_t header : 5;
     } date;
     uint32_t reg;
 } blink_receiver_packet_date_t;
@@ -115,8 +115,8 @@ typedef union {
         uint32_t byte_1 : 8;
     } bytes;
     struct {
-        uint32_t data : 28;
-        uint32_t type : 3;
+        uint32_t data : 27;
+        uint32_t type : 4;
         uint32_t multipacket : 1;
     } header;
     uint32_t reg;
