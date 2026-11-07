@@ -299,6 +299,10 @@ void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond) {
 }
 
 static void blink_receiver_handle_location(uint32_t packet, bool is_latitude) {
+    watch_display_text(WATCH_POSITION_TOP_LEFT, is_latitude ? "LA" : "LO");
+    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+
     blink_receiver_packet_location_t location_packet = { .reg = packet };
     int16_t value = (int16_t)location_packet.location.value;
 
@@ -312,6 +316,11 @@ static void blink_receiver_handle_location(uint32_t packet, bool is_latitude) {
     if (new_location.reg != maybe_location.reg) {
         filesystem_write_file("location.u32", (char *) &new_location.reg, sizeof(movement_location_t));
     }
+
+    char buf[7];
+    snprintf(buf, sizeof(buf), is_latitude ? "%c %04d" : "%c%05d",
+        value < 0 ? '-' : '+', abs(value));
+    watch_display_text(WATCH_POSITION_BOTTOM, buf);
 }
 
 //set local time to received timestamp
