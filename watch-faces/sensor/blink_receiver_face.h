@@ -54,6 +54,7 @@
 #define BLINK_RECEIVER_HEADER_LATITUDE 4
 #define BLINK_RECEIVER_HEADER_LONGITUDE 5
 #define BLINK_RECEIVER_HEADER_SET_ZONE 6
+#define BLINK_RECEIVER_HEADER_TEST 7
 
 typedef enum {
   BLINK_RECEIVER_MODE_IDLE,
@@ -67,11 +68,11 @@ typedef enum {
 typedef union {
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 2;
+        uint32_t unused : 1;
         uint32_t hour : 5;
         uint32_t minute : 6;
         uint32_t second : 6;
-        uint32_t header : 5;
+        uint32_t header : 6;
     } time;
     uint32_t reg;
 } blink_receiver_packet_time_t;
@@ -79,9 +80,9 @@ typedef union {
 typedef union {
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 3;
+        uint32_t unused : 2;
         uint32_t value : 16;
-        uint32_t header : 5;
+        uint32_t header : 6;
     } location;
     uint32_t reg;
 } blink_receiver_packet_location_t;
@@ -89,9 +90,9 @@ typedef union {
 typedef union {
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 13;
+        uint32_t unused : 12;
         uint32_t index : 6;
-        uint32_t header : 5;
+        uint32_t header : 6;
     } zone;
     uint32_t reg;
 } blink_receiver_packet_zone_t;
@@ -99,11 +100,11 @@ typedef union {
 typedef union {
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 4;
+        uint32_t unused : 3;
         uint32_t year : 6;
         uint32_t month : 4;
         uint32_t day : 5;
-        uint32_t header : 5;
+        uint32_t header : 6;
     } date;
     uint32_t reg;
 } blink_receiver_packet_date_t;
@@ -116,8 +117,9 @@ typedef union {
         uint32_t byte_1 : 8;
     } bytes;
     struct {
-        uint32_t data : 27;
+        uint32_t _ : 26;
         uint32_t type : 4;
+        uint32_t immediate: 1;
         uint32_t multipacket : 1;
     } header;
     uint32_t reg;
@@ -135,7 +137,7 @@ typedef struct {
     uint32_t *data;
     uint8_t samples_received; 
     int16_t bits_received;  
-    uint8_t current_package;
+    int8_t current_package;
 
     uint16_t *sample_history;
     uint8_t history_position;
