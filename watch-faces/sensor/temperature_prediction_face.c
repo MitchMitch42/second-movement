@@ -34,7 +34,7 @@
 
 // Constants for showing the predicted temperature
 #define TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX 120 //max buffer size for temperature values
-#define TEMPERATURE_PREDICTION_AVERAGING_MAX 99 //max sample count for averaging
+#define TEMPERATURE_PREDICTION_AVERAGING_MAX 120 //max sample count for averaging
 
 // Constants for coefficient calculation
 #define TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES 5 //defines how long the temperature shall be constant to determine that equilibrium has been reached.
@@ -100,11 +100,13 @@ static void temperature_prediction_face_calculate_ema(temperature_prediction_sta
         float end_temperature = temperature_prediction_face_calculate_end_temperature(&state->buffer, state->coefficient);
         float alpha = 2.0f / (state->average_count + 1); // Alpha = 2 / (N + 1), where N is the number of periods
         state->ema = state->ema == -999 ? end_temperature : ((end_temperature * alpha) + (state->ema * (1 - alpha))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))
+        
         if (fabs(state->ema - end_temperature) > ((float)state->cap) / 2.0) { //if the difference between the end temperature and the EMA is too big, reset the EMA to the end temperature
             state->ema = end_temperature;
         }
+        
         float error = fabs(state->ema - end_temperature);
-        float alpha2 = 2.0f / (30 + 1); // Alpha = 2 / (N + 1), where N is the number of periods (TODO: currently fixed at 30)
+        alpha = 2.0f / (30 + 1); // Alpha = 2 / (N + 1), where N is the number of periods (TODO: currently fixed at 30)
         state->ema_error = state->ema_error == -999 ? error : ((error * alpha2) + (state->ema_error * (1 - alpha2))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))       
     }
 }
@@ -241,7 +243,7 @@ static void temperature_prediction_face_update_display_top_left(temperature_pred
     } else if (state->apply_hack) {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "HAC", "HC");
     } else {
-        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEP", "ET");
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "EST", "ET");
     }
 }
 
