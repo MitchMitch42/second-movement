@@ -257,13 +257,7 @@ static void temperature_prediction_face_update_display_top_left(temperature_pred
     } else if (state->apply_hack) {
         watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "HAC", "HC");
     } else {
-        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "EST", "ET");
-    }
-
-    if(state->mode != temperature_prediction_coefficient) {
-        char buf[8];
-        sprintf(buf, "%1d", state->error_mode);   
-        watch_display_string(buf, 1);
+        watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "TEP", "ET");
     }
 }
 
@@ -394,7 +388,6 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
         state->cap = 30;
         state->show_real_temperature = true;
         state->apply_hack = false;
-        state->error_mode = 1;
     }
 }
 
@@ -412,11 +405,6 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
         case EVENT_LIGHT_BUTTON_DOWN:
             switch (state->mode) {
                 case temperature_prediction_running:
-                    state->error_mode++;
-                    if (state->error_mode > 4) {
-                        state->error_mode = 1;
-                    }
-                    temperature_prediction_face_update_display_top_left(state);
                 case temperature_prediction_coefficient:              
                 case temperature_prediction_waiting:
                     movement_illuminate_led();
