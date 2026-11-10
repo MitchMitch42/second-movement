@@ -106,8 +106,6 @@ static void temperature_prediction_face_calculate_ema(temperature_prediction_sta
         float error = fabs(state->ema - end_temperature);
         float alpha2 = 2.0f / (30 + 1); // Alpha = 2 / (N + 1), where N is the number of periods (TODO: currently fixed at 30)
         state->ema_error = state->ema_error == -999 ? error : ((error * alpha2) + (state->ema_error * (1 - alpha2))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))       
-
-        temperature_prediction_face_add_to_rolling_buffer(&state->calculated_averages, state->ema);
     }
 }
 
@@ -122,20 +120,6 @@ static float temperature_prediction_face_improve_ema(temperature_prediction_stat
     }
     return m < 0 ? state->ema - state->ema_error : m > 0 ? state->ema + state->ema_error : state->ema;
 }
-
-/// @brief calculate temperature deviation
-static float temperature_correction_face_calculate_error(temperature_prediction_state_t *state) {
-    if (state->calculated_averages.length < 1) {
-        return 0; 
-    }
-    float min = state->calculated_averages.data[0];
-    float max = state->calculated_averages.data[0];
-    for (int i = 1; i < state->calculated_averages.length; i++) {
-        if (state->calculated_averages.data[i] < min) min = state->calculated_averages.data[i]; // Update minimum
-        if (state->calculated_averages.data[i] > max) max = state->calculated_averages.data[i]; // Update maximum
-    }
-    return max - min;
-}    
 
 // ---------------------------
 // Calculation of coefficient
@@ -358,7 +342,6 @@ static void temperature_prediction_face_start_logging(temperature_prediction_sta
         state->mode = temperature_prediction_coefficient;
     } else {
         temperature_prediction_face_init_rolling_buffer(&state->buffer, state->buffer_size);
-        temperature_prediction_face_init_rolling_buffer(&state->calculated_averages, 60);
         state->ema = -999;
         state->ema_error = -999;
         state->mode = temperature_prediction_running;
@@ -380,7 +363,6 @@ void temperature_prediction_face_setup(uint8_t watch_face_index, void ** context
 
         temperature_prediction_state_t *state = (temperature_prediction_state_t *)*context_ptr;       
         state->buffer.data = malloc(TEMPERATURE_PREDICTION_BUFFER_SIZE_MAX * sizeof(float));
-        state->calculated_averages.data = malloc(60 * sizeof(float));
         
         state->coefficient = TEMPERATURE_PREDICTION_DEFAULT_COEFFICIENT;
         state->buffer_size = TEMPERATURE_PREDICTION_DEFAULT_BUFFER_SIZE;
