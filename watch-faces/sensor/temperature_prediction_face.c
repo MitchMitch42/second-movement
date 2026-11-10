@@ -386,6 +386,56 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
         case EVENT_ACTIVATE: 
             temperature_prediction_face_start_logging(state, false);
             break;
+        case EVENT_TICK:
+            switch (state->mode) {
+                case temperature_prediction_waiting:
+                    break;
+                case temperature_prediction_setting: 
+                    if (state->quick_ticks_running) {
+                        temperature_prediction_face_advance_settings(state);
+                    }
+                    temperature_prediction_face_display_settings(state, event.subsecond);
+                    break;
+                case temperature_prediction_running:
+                    if(watch_rtc_get_date_time().unit.second % 2) watch_clear_indicator(WATCH_INDICATOR_SIGNAL);
+                    else watch_set_indicator(WATCH_INDICATOR_SIGNAL);       
+
+                    temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature()); 
+                    temperature_prediction_face_calculate_ema(state);
+                    float temp_to_show = state->apply_hack ? temperature_prediction_face_improve_ema(state) : state->ema;
+                    temperature_prediction_face_update_display(state, state->show_real_temperature || state->ema == -999 ? state->buffer.data[state->buffer.head_index] : temp_to_show);
+                    break;
+                case temperature_prediction_coefficient:
+                        if(watch_rtc_get_date_time().unit.second % 2) watch_set_indicator(WATCH_INDICATOR_SIGNAL);
+                        else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);              
+                        float temperature= movement_get_temperature();
+
+                        if (watch_rtc_get_date_time().unit.second == 0) { //once a minute
+                            temperature_prediction_face_add_to_rolling_buffer(&state->buffer, temperature);
+                            if (state->buffer.length == state->buffer.max) { //buffer full
+                                state->mode = temperature_prediction_waiting;
+                                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
+                                break;
+                            } else if (state->buffer.length >= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES) { //only after n minutes
+                                if (temperature_prediction_face_equilibrium_reached(&state->buffer)) { //temperature is stable: stop calculation
+                                    state->coefficient = temperature_prediction_face_calculate_coefficient_with_linear_regression(&state->buffer, TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_IGNORE_START_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_END_TEMP_DELTA);
+                                    //coefficient must be positive and shall only have 1 integer place and 5 decimal places, otherwise we can not properly show it 
+                                    state->coefficient = roundf(state->coefficient * 100000.0f) / 100000.0f;
+                                    if (state->coefficient < 0) {
+                                        state->coefficient = 0;
+                                    } else if (state->coefficient > 9.99999) {
+                                        state->coefficient = 9.99999;
+                                    }
+                                    state->mode = temperature_prediction_waiting;
+                                    temperature_prediction_face_display_coefficient(state->coefficient);
+                                    break;
+                                }
+                            }
+                        }
+                        temperature_prediction_face_update_display(state, temperature);
+                    break;
+            }
+            break;
         case EVENT_LIGHT_BUTTON_DOWN:
             switch (state->mode) {
                 case temperature_prediction_running:
@@ -478,56 +528,6 @@ bool temperature_prediction_face_loop(movement_event_t event, void *context) {
             if (state->mode == temperature_prediction_setting && state->quick_ticks_running ) {
                 state->quick_ticks_running = false;
                 movement_request_tick_frequency(4); // we need to blink in settings
-            }
-            break;
-        case EVENT_TICK:
-            switch (state->mode) {
-                case temperature_prediction_waiting:
-                    break;
-                case temperature_prediction_running:
-                    if(watch_rtc_get_date_time().unit.second % 2) watch_clear_indicator(WATCH_INDICATOR_SIGNAL);
-                    else watch_set_indicator(WATCH_INDICATOR_SIGNAL);       
-
-                    temperature_prediction_face_add_to_rolling_buffer(&state->buffer, movement_get_temperature()); 
-                    temperature_prediction_face_calculate_ema(state);
-                    float temp_to_show = state->apply_hack ? temperature_prediction_face_improve_ema(state) : state->ema;
-                    temperature_prediction_face_update_display(state, state->show_real_temperature || state->ema == -999 ? state->buffer.data[state->buffer.head_index] : temp_to_show);
-                    break;
-                case temperature_prediction_setting: 
-                    if (state->quick_ticks_running) {
-                        temperature_prediction_face_advance_settings(state);
-                    }
-                    temperature_prediction_face_display_settings(state, event.subsecond);
-                    break;
-                case temperature_prediction_coefficient:
-                        if(watch_rtc_get_date_time().unit.second % 2) watch_set_indicator(WATCH_INDICATOR_SIGNAL);
-                        else watch_clear_indicator(WATCH_INDICATOR_SIGNAL);              
-                        float temperature= movement_get_temperature();
-
-                        if (watch_rtc_get_date_time().unit.second == 0) { //once a minute
-                            temperature_prediction_face_add_to_rolling_buffer(&state->buffer, temperature);
-                            if (state->buffer.length == state->buffer.max) { //buffer full
-                                state->mode = temperature_prediction_waiting;
-                                watch_display_text_with_fallback(WATCH_POSITION_BOTTOM, "FULL  ", " FULL ");
-                                break;
-                            } else if (state->buffer.length >= TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES) { //only after n minutes
-                                if (temperature_prediction_face_equilibrium_reached(&state->buffer)) { //temperature is stable: stop calculation
-                                    state->coefficient = temperature_prediction_face_calculate_coefficient_with_linear_regression(&state->buffer, TEMPERATURE_PREDICTION_CALCULATION_EQUILIBRIUM_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_IGNORE_START_MINUTES, TEMPERATURE_PREDICTION_CALCULATION_END_TEMP_DELTA);
-                                    //coefficient must be positive and shall only have 1 integer place and 5 decimal places, otherwise we can not properly show it 
-                                    state->coefficient = roundf(state->coefficient * 100000.0f) / 100000.0f;
-                                    if (state->coefficient < 0) {
-                                        state->coefficient = 0;
-                                    } else if (state->coefficient > 9.99999) {
-                                        state->coefficient = 9.99999;
-                                    }
-                                    state->mode = temperature_prediction_waiting;
-                                    temperature_prediction_face_display_coefficient(state->coefficient);
-                                    break;
-                                }
-                            }
-                        }
-                        temperature_prediction_face_update_display(state, temperature);
-                    break;
             }
             break;
         case EVENT_TIMEOUT:
