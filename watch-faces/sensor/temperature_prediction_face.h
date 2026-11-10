@@ -56,9 +56,7 @@ typedef struct {
     bool show_real_temperature;         // if true: show the raw temperature, not the calculated one 
     bool quick_ticks_running;           // if true: the user is holding down button to quickly advance through settings
     bool apply_hack;                    // TODO
-    temperature_prediction_rolling_buffer_t calculated_averages;     // rolling buffer holding averaged temperatures
     
-
     // settings
     float coefficient;                  // heat transfer coefficient
     int buffer_size;                    // how many raw datapoints shall be used for the estimation
