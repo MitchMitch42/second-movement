@@ -489,15 +489,15 @@ bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packe
                 pass = false;
             }
         } else {
-            if (state.current_package > 0) {
+            if (state->current_package > 0) {
                 if(data.header.immediate) {
                     // immediate packet: execute it right away
-                    pass = blink_receiver_execute_packet(state->packet[state->current_package], subsecond, state->frequency);
+                    pass = blink_receiver_execute_packet(state->data[state->current_package], subsecond, state->frequency);
                     state->current_package--;
                 }
             }
             for (uint8_t i = 0; i <= state->current_package && pass; i++) {
-                pass= blink_receiver_execute_packet(state->packet[i], subsecond, state->frequency);
+                pass= blink_receiver_execute_packet(state->data[i], subsecond, state->frequency);
             }
         }
     } else {
