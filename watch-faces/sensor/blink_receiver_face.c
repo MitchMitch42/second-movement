@@ -454,6 +454,13 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
                 pass = false;
             }
         } else {
+            if (state.current_package > 0) {
+                if(packet.header.immediate) {
+                    // immediate packet: execute it right away
+                    pass = blink_receiver_execute_packet(state->data[state->current_package], subsecond, state->frequency);
+                    state->current_package--;
+                }
+            }
             for (uint8_t i = 0; i <= state->current_package && pass; i++) {
                 pass= blink_receiver_execute_packet(state->data[i], subsecond, state->frequency);
             }
