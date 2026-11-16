@@ -55,6 +55,7 @@
 #define BLINK_RECEIVER_HEADER_LONGITUDE 5
 #define BLINK_RECEIVER_HEADER_SET_ZONE 6
 #define BLINK_RECEIVER_HEADER_TEST 7
+#define BLINK_RECEIVER_HEADER_PATCH 8
 
 typedef enum {
   BLINK_RECEIVER_MODE_IDLE,
@@ -108,6 +109,18 @@ typedef union {
     } date;
     uint32_t reg;
 } blink_receiver_packet_date_t;
+
+typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t unused : 8;
+        uint32_t offset : 8;
+        uint32_t is_plus : 1;
+        uint32_t is_smaller : 1;
+        uint32_t header : 6;
+    } patch;
+    uint32_t reg;
+} blink_receiver_packet_patch_t;
 
 typedef union {
     struct {
