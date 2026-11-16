@@ -43,7 +43,7 @@
 
 #define DEFAULT_FREQUENCY 64
 #define MAX_FREQUENCY 128
-#define DISPLAY_CURRENT_LIGHT_FREQUENCY 8
+#define DEFAULT_DISPLAY_CURRENT_LIGHT_FREQUENCY 8
 
 #define BITS_PER_PACKAGE 32
 #define MAX_PACKAGE_COUNT 8
@@ -144,6 +144,7 @@ typedef struct {
     uint8_t settings_state;
     uint16_t light_level_border;
     uint8_t frequency;
+    uint8_t display_current_light_frequency;
     uint8_t samples_per_bit;
 
     bool *samples;
