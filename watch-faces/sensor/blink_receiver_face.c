@@ -353,7 +353,7 @@ static bool blink_receiver_handle_zone(uint32_t packet, bool log) {
 }
 
 //set local time to received timestamp
-void blink_receiver_handle_timeset(uint32_t packet, uint16_t subsecond, uint8_t frequency, bool log)
+void blink_receiver_handle_timeset(uint32_t packet, bool log)
 {
     blink_receiver_packet_time_t data = { .reg = packet };
     
@@ -438,7 +438,7 @@ bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t 
     blink_receiver_packet_data_t data = { .reg = packet };
     switch(data.header.type) {
         case BLINK_RECEIVER_HEADER_TIMESET:     
-            blink_receiver_handle_timeset(packet, subsecond, frequency, log);
+            blink_receiver_handle_timeset(packet, log);
             break;
         case BLINK_RECEIVER_HEADER_DATESET:
             blink_receiver_handle_dateset(packet, log);
@@ -453,7 +453,7 @@ bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t 
             blink_receiver_handle_location(packet, false, log);
             break;
         case BLINK_RECEIVER_HEADER_SET_ZONE:
-            if (!blink_receiver_handle_zone(packet)) {
+            if (!blink_receiver_handle_zone(packet, log)) {
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MZ"); // unknown zone
                 return false;
             }
