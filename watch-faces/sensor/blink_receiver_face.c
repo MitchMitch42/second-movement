@@ -291,28 +291,26 @@ uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_
     return (uint8_t)(sum & 0xFF);
 }
 
-void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond) {
+void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond, bool log) {
     if (ms > 0) {
         watch_rtc_enable(false);
         delay_ms(ms); // delay clock
         watch_rtc_enable(true);
     }
 
-    watch_display_text(WATCH_POSITION_TOP_LEFT, "HB");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
-    char outputString2[4];
-    snprintf(outputString2, 4, "%3d", ms);
-    watch_display_string(outputString2, 4);
-    snprintf(outputString2, 4, "%3d", subsecond);
-    watch_display_string(outputString2, 7);
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "HB");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+        char outputString2[4];
+        snprintf(outputString2, 4, "%3d", ms);
+        watch_display_string(outputString2, 4);
+        snprintf(outputString2, 4, "%3d", subsecond);
+        watch_display_string(outputString2, 7);
+    }
 }
 
-static void blink_receiver_handle_location(uint32_t packet, bool is_latitude) {
-    watch_display_text(WATCH_POSITION_TOP_LEFT, is_latitude ? "LA" : "LO");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
-
+static void blink_receiver_handle_location(uint32_t packet, bool is_latitude, bool log) {
     blink_receiver_packet_location_t location_packet = { .reg = packet };
     int16_t value = (int16_t)location_packet.location.value;
 
@@ -327,13 +325,18 @@ static void blink_receiver_handle_location(uint32_t packet, bool is_latitude) {
         filesystem_write_file("location.u32", (char *) &new_location.reg, sizeof(movement_location_t));
     }
 
-    char buf[7];
-    snprintf(buf, sizeof(buf), is_latitude ? "%c %04d" : "%c%05d",
-        value < 0 ? '-' : '+', abs(value));
-    watch_display_text(WATCH_POSITION_BOTTOM, buf);
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, is_latitude ? "LA" : "LO");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+        char buf[7];
+        snprintf(buf, sizeof(buf), is_latitude ? "%c %04d" : "%c%05d",
+            value < 0 ? '-' : '+', abs(value));
+        watch_display_text(WATCH_POSITION_BOTTOM, buf);
+    }
 }
 
-static bool blink_receiver_handle_zone(uint32_t packet) {
+static bool blink_receiver_handle_zone(uint32_t packet, bool log) {
     blink_receiver_packet_zone_t zone_packet = { .reg = packet };
     if (zone_packet.zone.index >= NUM_ZONE_NAMES) {
         return false;
@@ -341,19 +344,18 @@ static bool blink_receiver_handle_zone(uint32_t packet) {
 
     movement_set_timezone_index(zone_packet.zone.index);
     movement_store_settings();
-    watch_display_text(WATCH_POSITION_TOP_LEFT, "ZN");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-    watch_display_text(WATCH_POSITION_BOTTOM, (char *)watch_utility_time_zone_name_at_index(zone_packet.zone.index));
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "ZN");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, (char *)watch_utility_time_zone_name_at_index(zone_packet.zone.index));
+    }
     return true;
 }
 
 //set local time to received timestamp
-void blink_receiver_handle_timeset(uint32_t packet, uint16_t subsecond, uint8_t frequency)
+void blink_receiver_handle_timeset(uint32_t packet, uint16_t subsecond, uint8_t frequency, bool log)
 {
     blink_receiver_packet_time_t data = { .reg = packet };
-    watch_display_text(WATCH_POSITION_TOP_LEFT, "TI");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
     
     watch_date_time_t date_time = movement_get_local_date_time();
     date_time.unit.second = data.time.second;
@@ -362,21 +364,23 @@ void blink_receiver_handle_timeset(uint32_t packet, uint16_t subsecond, uint8_t 
 
     movement_set_local_date_time(date_time);
 
-    char outputString2[3];
-    snprintf(outputString2, 3, "%02d", date_time.unit.hour);
-    watch_display_string(outputString2, 4);
-    snprintf(outputString2, 3, "%02d", date_time.unit.minute);
-    watch_display_string(outputString2, 6);
-    snprintf(outputString2, 3, "%02d", date_time.unit.second);
-    watch_display_string(outputString2, 8);
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "TI");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+        char outputString2[3];
+        snprintf(outputString2, 3, "%02d", date_time.unit.hour);
+        watch_display_string(outputString2, 4);
+        snprintf(outputString2, 3, "%02d", date_time.unit.minute);
+        watch_display_string(outputString2, 6);
+        snprintf(outputString2, 3, "%02d", date_time.unit.second);
+        watch_display_string(outputString2, 8);
+    }
 }
 
-void blink_receiver_handle_patch(uint32_t packet, uint16_t subsecond, uint8_t frequency)
+void blink_receiver_handle_patch(uint32_t packet, uint16_t subsecond, uint8_t frequency, bool log)
 {
     blink_receiver_packet_patch_t data = { .reg = packet };
-    watch_display_text(WATCH_POSITION_TOP_LEFT, "PA");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
     
     if (data.patch.is_smaller) {
         if ((uint32_t)subsecond * 2 < frequency) {
@@ -388,33 +392,40 @@ void blink_receiver_handle_patch(uint32_t packet, uint16_t subsecond, uint8_t fr
         }
     }
     
-    char outputString2[3];
-    snprintf(outputString2, 3, "%02d", data.patch.is_smaller);
-    watch_display_string(outputString2, 4);
-    snprintf(outputString2, 3, "%02d", data.patch.is_plus);
-    watch_display_string(outputString2, 6);
-    snprintf(outputString2, 3, "%02d", data.patch.offset);
-    watch_display_string(outputString2, 8);
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "PA");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+        char outputString2[3];
+        snprintf(outputString2, 3, "%02d", data.patch.is_smaller);
+        watch_display_string(outputString2, 4);
+        snprintf(outputString2, 3, "%02d", data.patch.is_plus);
+        watch_display_string(outputString2, 6);
+        snprintf(outputString2, 3, "%02d", data.patch.offset);
+        watch_display_string(outputString2, 8);
+    }
 }
 
 //set local date to received date
-void blink_receiver_handle_dateset(uint32_t packet)
+void blink_receiver_handle_dateset(uint32_t packet, bool log)
 {
     blink_receiver_packet_date_t data = { .reg = packet };
-    watch_display_text(WATCH_POSITION_TOP_LEFT, "DA");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
 
-    char outputString2[3];
-    snprintf(outputString2, 3, "%2d", data.date.day);
-    watch_display_string(outputString2, 2);
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "DA");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        char outputString2[3];
+        snprintf(outputString2, 3, "%2d", data.date.day);
+        watch_display_string(outputString2, 2);
 
-    snprintf(outputString2, 3, "%02d", data.date.month);
-    watch_display_string(outputString2, 8);
+        snprintf(outputString2, 3, "%02d", data.date.month);
+        watch_display_string(outputString2, 8);
 
-    char outputString4[5];
-    snprintf(outputString4, 5, "%04d", (data.date.year) + 2020);
-    printf(outputString4);
-    watch_display_string(outputString4, 4);
+        char outputString4[5];
+        snprintf(outputString4, 5, "%04d", (data.date.year) + 2020);
+        printf(outputString4);
+        watch_display_string(outputString4, 4);
+    }
     
     watch_date_time_t date_time = movement_get_local_date_time();
     date_time.unit.day = data.date.day;
@@ -423,23 +434,23 @@ void blink_receiver_handle_dateset(uint32_t packet)
     movement_set_local_date_time(date_time);
 }
 
-bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t frequency) {
+bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t frequency, bool log) {
     blink_receiver_packet_data_t data = { .reg = packet };
     switch(data.header.type) {
         case BLINK_RECEIVER_HEADER_TIMESET:     
-            blink_receiver_handle_timeset(packet, subsecond, frequency);
+            blink_receiver_handle_timeset(packet, subsecond, frequency, log);
             break;
         case BLINK_RECEIVER_HEADER_DATESET:
-            blink_receiver_handle_dateset(packet);
+            blink_receiver_handle_dateset(packet, log);
             break;
         case BLINK_RECEIVER_HEADER_HEARTBEAT:
-            blink_receiver_handle_heartbeat((uint16_t)((((double)subsecond * 1000.0) / (double)frequency) + 0.5), subsecond);
+            blink_receiver_handle_heartbeat((uint16_t)((((double)subsecond * 1000.0) / (double)frequency) + 0.5), subsecond, log);
             break;
         case BLINK_RECEIVER_HEADER_LATITUDE:
-            blink_receiver_handle_location(packet, true);
+            blink_receiver_handle_location(packet, true, log);
             break;
         case BLINK_RECEIVER_HEADER_LONGITUDE:
-            blink_receiver_handle_location(packet, false);
+            blink_receiver_handle_location(packet, false, log);
             break;
         case BLINK_RECEIVER_HEADER_SET_ZONE:
             if (!blink_receiver_handle_zone(packet)) {
@@ -451,7 +462,7 @@ bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t 
             watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
             break;
         case BLINK_RECEIVER_HEADER_PATCH:
-            blink_receiver_handle_patch(packet, subsecond, frequency);
+            blink_receiver_handle_patch(packet, subsecond, frequency, log);
             break;
         default: 
             watch_display_text(WATCH_POSITION_TOP_LEFT, "MH"); // unknown header
@@ -462,10 +473,6 @@ bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t 
 
 // Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
 bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packet, uint16_t subsecond) {
-    char outputString9[9];
-    snprintf(outputString9, 9, "%08x", packet);
-    watch_display_string(outputString9, 2);
-
     bool pass = true;
     blink_receiver_packet_data_t data = { .reg = packet };
     uint8_t checksum = blink_receiver_calculate_checksum(data.bytes.byte_1, data.bytes.byte_2, data.bytes.byte_3);
@@ -475,7 +482,7 @@ bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packe
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MU"); //one of multiple packages received
                 if(data.header.immediate) {
                     // immediate packet: execute it right away
-                    pass = blink_receiver_execute_packet(packet, subsecond, state->frequency);
+                    pass = blink_receiver_execute_packet(packet, subsecond, state->frequency, false);
                     if(pass) {
                         // if current packet was executed successfully, clear the current package
                         state->current_package--;
