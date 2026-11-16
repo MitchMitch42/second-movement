@@ -499,12 +499,12 @@ bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packe
             if (state->current_package > 0) {
                 if(data.header.immediate) {
                     // immediate packet: execute it right away
-                    pass = blink_receiver_execute_packet(state->data[state->current_package], subsecond, state->frequency);
+                    pass = blink_receiver_execute_packet(state->data[state->current_package], subsecond, state->frequency, false);
                     state->current_package--;
                 }
             }
             for (uint8_t i = 0; i <= state->current_package && pass; i++) {
-                pass= blink_receiver_execute_packet(state->data[i], subsecond, state->frequency);
+                pass= blink_receiver_execute_packet(state->data[i], subsecond, state->frequency, i == state->current_package);
             }
         }
     } else {
