@@ -622,7 +622,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
                 case BLINK_RECEIVER_MODE_IDLE:
                     // start listening
-                    //watch_buzzer_play_note(BUZZER_NOTE_E5, 100);
+                    watch_buzzer_play_note(BUZZER_NOTE_E5, 100);
                     state->samples_received = 0;
                     state->current_package = 0;
                     state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
