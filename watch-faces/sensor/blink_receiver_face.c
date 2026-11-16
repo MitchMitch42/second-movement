@@ -296,7 +296,6 @@ void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond) {
     watch_display_string(outputString2, 4);
     snprintf(outputString2, 4, "%3d", subsecond);
     watch_display_string(outputString2, 7);
-
 }
 
 static void blink_receiver_handle_location(uint32_t packet, bool is_latitude) {
@@ -352,9 +351,6 @@ void blink_receiver_handle_timeset(uint32_t packet, uint16_t subsecond, uint8_t 
     date_time.unit.hour = data.time.hour;
 
     movement_set_local_date_time(date_time);
-    if ((uint32_t)subsecond * 2 > frequency) {
-        movement_set_utc_timestamp(movement_get_utc_timestamp() + 1);
-    }
 
     char outputString2[3];
     snprintf(outputString2, 3, "%02d", date_time.unit.hour);
@@ -362,6 +358,32 @@ void blink_receiver_handle_timeset(uint32_t packet, uint16_t subsecond, uint8_t 
     snprintf(outputString2, 3, "%02d", date_time.unit.minute);
     watch_display_string(outputString2, 6);
     snprintf(outputString2, 3, "%02d", date_time.unit.second);
+    watch_display_string(outputString2, 8);
+}
+
+void blink_receiver_handle_patch(uint32_t packet, uint16_t subsecond, uint8_t frequency)
+{
+    blink_receiver_packet_patch_t data = { .reg = packet };
+    watch_display_text(WATCH_POSITION_TOP_LEFT, "PA");
+    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    
+    if (data.patch.is_smaller) {
+        if ((uint32_t)subsecond * 2 < frequency) {
+            movement_set_utc_timestamp(movement_get_utc_timestamp() + (data.patch.is_plus ? data.patch.offset : -data.patch.offset));
+        }
+    } else {
+        if ((uint32_t)subsecond * 2 > frequency) {
+            movement_set_utc_timestamp(movement_get_utc_timestamp() + (data.patch.is_plus ? data.patch.offset : -data.patch.offset));
+        }
+    }
+    
+    char outputString2[3];
+    snprintf(outputString2, 3, "%02d", data.patch.is_smaller);
+    watch_display_string(outputString2, 4);
+    snprintf(outputString2, 3, "%02d", data.patch.is_plus);
+    watch_display_string(outputString2, 6);
+    snprintf(outputString2, 3, "%02d", data.patch.offset);
     watch_display_string(outputString2, 8);
 }
 
@@ -417,6 +439,9 @@ bool blink_receiver_execute_packet(uint32_t data, uint16_t subsecond, uint8_t fr
             break;
         case BLINK_RECEIVER_HEADER_TEST:
             watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
+            break;
+        case BLINK_RECEIVER_HEADER_PATCH:
+            blink_receiver_handle_patch(data, subsecond, frequency);
             break;
         default: 
             watch_display_text(WATCH_POSITION_TOP_LEFT, "MH"); // unknown header
