@@ -423,26 +423,26 @@ void blink_receiver_handle_dateset(uint32_t packet)
     movement_set_local_date_time(date_time);
 }
 
-bool blink_receiver_execute_packet(uint32_t data, uint16_t subsecond, uint8_t frequency) {
-    blink_receiver_packet_data_t packet = { .reg = data };
-    switch(packet.header.type) {
+bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t frequency) {
+    blink_receiver_packet_data_t data = { .reg = packet };
+    switch(data.header.type) {
         case BLINK_RECEIVER_HEADER_TIMESET:     
-            blink_receiver_handle_timeset(data, subsecond, frequency);
+            blink_receiver_handle_timeset(packet, subsecond, frequency);
             break;
         case BLINK_RECEIVER_HEADER_DATESET:
-            blink_receiver_handle_dateset(data);
+            blink_receiver_handle_dateset(packet);
             break;
         case BLINK_RECEIVER_HEADER_HEARTBEAT:
             blink_receiver_handle_heartbeat((uint16_t)((((double)subsecond * 1000.0) / (double)frequency) + 0.5), subsecond);
             break;
         case BLINK_RECEIVER_HEADER_LATITUDE:
-            blink_receiver_handle_location(data, true);
+            blink_receiver_handle_location(packet, true);
             break;
         case BLINK_RECEIVER_HEADER_LONGITUDE:
-            blink_receiver_handle_location(data, false);
+            blink_receiver_handle_location(packet, false);
             break;
         case BLINK_RECEIVER_HEADER_SET_ZONE:
-            if (!blink_receiver_handle_zone(data)) {
+            if (!blink_receiver_handle_zone(packet)) {
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MZ"); // unknown zone
                 return false;
             }
@@ -451,7 +451,7 @@ bool blink_receiver_execute_packet(uint32_t data, uint16_t subsecond, uint8_t fr
             watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
             break;
         case BLINK_RECEIVER_HEADER_PATCH:
-            blink_receiver_handle_patch(data, subsecond, frequency);
+            blink_receiver_handle_patch(packet, subsecond, frequency);
             break;
         default: 
             watch_display_text(WATCH_POSITION_TOP_LEFT, "MH"); // unknown header
@@ -461,21 +461,21 @@ bool blink_receiver_execute_packet(uint32_t data, uint16_t subsecond, uint8_t fr
 }
 
 // Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
-bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, uint16_t subsecond) {
+bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packet, uint16_t subsecond) {
     char outputString9[9];
-    snprintf(outputString9, 9, "%08x", data);
+    snprintf(outputString9, 9, "%08x", packet);
     watch_display_string(outputString9, 2);
 
     bool pass = true;
-    blink_receiver_packet_data_t packet = { .reg = data };
-    uint8_t checksum = blink_receiver_calculate_checksum(packet.bytes.byte_1, packet.bytes.byte_2, packet.bytes.byte_3);
-    if (checksum == packet.bytes.checksum) {
-        if (packet.header.multipacket) {
+    blink_receiver_packet_data_t data = { .reg = packet };
+    uint8_t checksum = blink_receiver_calculate_checksum(data.bytes.byte_1, data.bytes.byte_2, data.bytes.byte_3);
+    if (checksum == data.bytes.checksum) {
+        if (data.header.multipacket) {
             if (state->current_package + 1 < MAX_PACKAGE_COUNT) {
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MU"); //one of multiple packages received
-                if(packet.header.immediate) {
+                if(data.header.immediate) {
                     // immediate packet: execute it right away
-                    pass = blink_receiver_execute_packet(data, subsecond, state->frequency);
+                    pass = blink_receiver_execute_packet(packet, subsecond, state->frequency);
                     if(pass) {
                         // if current packet was executed successfully, clear the current package
                         state->current_package--;
@@ -490,14 +490,14 @@ bool blink_receiver_handle_data(blink_receiver_state_t *state, uint32_t data, ui
             }
         } else {
             if (state.current_package > 0) {
-                if(packet.header.immediate) {
+                if(data.header.immediate) {
                     // immediate packet: execute it right away
-                    pass = blink_receiver_execute_packet(state->data[state->current_package], subsecond, state->frequency);
+                    pass = blink_receiver_execute_packet(state->packet[state->current_package], subsecond, state->frequency);
                     state->current_package--;
                 }
             }
             for (uint8_t i = 0; i <= state->current_package && pass; i++) {
-                pass= blink_receiver_execute_packet(state->data[i], subsecond, state->frequency);
+                pass= blink_receiver_execute_packet(state->packet[i], subsecond, state->frequency);
             }
         }
     } else {
@@ -568,7 +568,7 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                 state->bits_received++;
 
                 if (state->bits_received == BITS_PER_PACKAGE) { // 32bit package complete
-                    if (blink_receiver_handle_data(state, state->data[state->current_package], subsecond)) {
+                    if (blink_receiver_process_packet(state, state->data[state->current_package], subsecond)) {
                         //another package is coming
                         state->bits_received = 0;
                         state->current_package++;
