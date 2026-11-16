@@ -161,6 +161,7 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         state->light_level_border = DEFAULT_LIGHT_LEVEL_BORDER; 
         state->samples_per_bit = DEFAULT_SAMPLES_PER_BIT;
         state->frequency = DEFAULT_FREQUENCY;
+        state->display_current_light_frequency = DEFAULT_DISPLAY_CURRENT_LIGHT_FREQUENCY;
     }
 }
 
@@ -208,6 +209,11 @@ static void blink_receiver_display_settings(blink_receiver_state_t *state) {
             snprintf(buf, sizeof(buf), "%5u", state->light_level_border);
             watch_display_string(buf, 4);
             break;
+        case 3:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "DF");
+            snprintf(buf, sizeof(buf), "%2u", state->display_current_light_frequency);
+            watch_display_string(buf, 2);
+            break;
         default:
             break;
     }
@@ -230,6 +236,10 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
             state->light_level_border += LIGHT_LEVEL_BORDER_STEP;
             if (state->light_level_border > MAX_LIGHT_LEVEL_BORDER) state->light_level_border = MIN_LIGHT_LEVEL_BORDER;
             break;
+        case 3:
+            state->display_current_light_frequency = state->display_current_light_frequency * 2 > MAX_FREQUENCY
+                ? 1 : state->display_current_light_frequency * 2;
+            break;
         default:
             break;
     }
@@ -237,7 +247,7 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
 
 static void blink_receiver_go_to_reading_state(blink_receiver_state_t *state) {
     state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
-    movement_request_tick_frequency(DISPLAY_CURRENT_LIGHT_FREQUENCY);
+    movement_request_tick_frequency(state->display_current_light_frequency);
     watch_clear_display();
     watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
 }
@@ -565,7 +575,7 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                         state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
                     } else {
                         //transmission complete
-                        movement_request_tick_frequency(DISPLAY_CURRENT_LIGHT_FREQUENCY);
+                        movement_request_tick_frequency(state->display_current_light_frequency);
                         state->mode = BLINK_RECEIVER_MODE_IDLE;
                     }
                 }
@@ -657,7 +667,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 blink_receiver_move_history(state, -1);
             } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
                 state->settings_state++;
-                if (state->settings_state > 2) {
+                if (state->settings_state > 3) {
                     blink_receiver_go_to_reading_state(state); // exit settings
                 } else {
                     blink_receiver_display_settings(state);
