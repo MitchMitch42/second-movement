@@ -157,11 +157,11 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
 
         state->samples = malloc(MAX_SAMPLES_PER_BIT * sizeof(*state->samples));
         state->sample_history = malloc((BITS_PER_PACKAGE + 1) * sizeof(*state->sample_history));
-        state->data = malloc(MAX_PACKAGE_COUNT * sizeof(uint32_t));
+        state->packets = malloc(MAX_PACKAGE_COUNT * sizeof(uint32_t));
         state->light_level_border = DEFAULT_LIGHT_LEVEL_BORDER; 
         state->samples_per_bit = DEFAULT_SAMPLES_PER_BIT;
-        state->frequency = DEFAULT_FREQUENCY;
-        state->display_current_light_frequency = DEFAULT_DISPLAY_CURRENT_LIGHT_FREQUENCY;
+        state->read_frequency = DEFAULT_READ_FREQUENCY;
+        state->idle_frequency = DEFAULT_IDLE_FREQUENCY;
     }
 }
 
@@ -195,7 +195,7 @@ static void blink_receiver_display_settings(blink_receiver_state_t *state) {
     switch (state->settings_state) {
         case 0:
             watch_display_text(WATCH_POSITION_TOP_LEFT, "FC");
-            snprintf(buf, sizeof(buf), "%2u", state->frequency);
+            snprintf(buf, sizeof(buf), "%2u", state->read_frequency);
             watch_display_string(buf, 2);
             break;
         case 1:
@@ -211,7 +211,7 @@ static void blink_receiver_display_settings(blink_receiver_state_t *state) {
             break;
         case 3:
             watch_display_text(WATCH_POSITION_TOP_LEFT, "DF");
-            snprintf(buf, sizeof(buf), "%2u", state->display_current_light_frequency);
+            snprintf(buf, sizeof(buf), "%2u", state->idle_frequency);
             watch_display_string(buf, 2);
             break;
         default:
@@ -222,7 +222,7 @@ static void blink_receiver_display_settings(blink_receiver_state_t *state) {
 static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
     switch (state->settings_state) {
         case 0:
-            state->frequency = state->frequency * 2 > MAX_FREQUENCY ? 1 : state->frequency * 2;
+            state->read_frequency = state->read_frequency * 2 > MAX_FREQUENCY ? 1 : state->read_frequency * 2;
             break;
         case 1:
             if (state->samples_per_bit < 8) {
@@ -237,8 +237,7 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
             if (state->light_level_border > MAX_LIGHT_LEVEL_BORDER) state->light_level_border = MIN_LIGHT_LEVEL_BORDER;
             break;
         case 3:
-            state->display_current_light_frequency = state->display_current_light_frequency * 2 > MAX_FREQUENCY
-                ? 1 : state->display_current_light_frequency * 2;
+            state->idle_frequency = state->idle_frequency * 2 > MAX_FREQUENCY ? 1 : state->idle_frequency * 2;
             break;
         default:
             break;
@@ -247,7 +246,7 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
 
 static void blink_receiver_go_to_reading_state(blink_receiver_state_t *state) {
     state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
-    movement_request_tick_frequency(state->display_current_light_frequency);
+    movement_request_tick_frequency(state->idle_frequency);
     watch_clear_display();
     watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
 }
@@ -482,7 +481,7 @@ bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packe
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MU"); //one of multiple packages received
                 if(data.header.immediate) {
                     // immediate packet: execute it right away
-                    pass = blink_receiver_execute_packet(packet, subsecond, state->frequency, false);
+                    pass = blink_receiver_execute_packet(packet, subsecond, state->read_frequency, false);
                     if(pass) {
                         // if current packet was executed successfully, clear the current package
                         state->current_package--;
@@ -499,12 +498,12 @@ bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packe
             if (state->current_package > 0) {
                 if(data.header.immediate) {
                     // immediate packet: execute it right away
-                    pass = blink_receiver_execute_packet(state->data[state->current_package], subsecond, state->frequency, false);
+                    pass = blink_receiver_execute_packet(state->packets[state->current_package], subsecond, state->read_frequency, false);
                     state->current_package--;
                 }
             }
             for (uint8_t i = 0; i <= state->current_package && pass; i++) {
-                pass= blink_receiver_execute_packet(state->data[i], subsecond, state->frequency, i == state->current_package);
+                pass= blink_receiver_execute_packet(state->packets[i], subsecond, state->read_frequency, i == state->current_package);
             }
         }
     } else {
@@ -556,7 +555,7 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                 if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
                     //enough bright samples detected: transmission of package has started
                     state->bits_received = 0;
-                    state->data[state->current_package] = 0;
+                    state->packets[state->current_package] = 0;
                     for (int i = 0; i <= BITS_PER_PACKAGE; i++) {
                         state->sample_history[i] = 0;
                     }
@@ -568,21 +567,21 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                 //start signal received: record the next packet (32 bit, 32*samples_per_bit samples)
                 state->sample_history[state->bits_received + 1] =
                     blink_receiver_pack_samples(state->samples_per_bit, state->samples);
-                state->data[state->current_package] = state->data[state->current_package] << 1;
+                state->packets[state->current_package] = state->packets[state->current_package] << 1;
                 if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
-                    state->data[state->current_package] += 1;
+                    state->packets[state->current_package] += 1;
                 }
                 state->bits_received++;
 
                 if (state->bits_received == BITS_PER_PACKAGE) { // 32bit package complete
-                    if (blink_receiver_process_packet(state, state->data[state->current_package], subsecond)) {
+                    if (blink_receiver_process_packet(state, state->packets[state->current_package], subsecond)) {
                         //another package is coming
                         state->bits_received = 0;
                         state->current_package++;
                         state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
                     } else {
                         //transmission complete
-                        movement_request_tick_frequency(state->display_current_light_frequency);
+                        movement_request_tick_frequency(state->idle_frequency);
                         state->mode = BLINK_RECEIVER_MODE_IDLE;
                     }
                 }
@@ -629,7 +628,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
                     watch_display_string("  SCAN  ", 2);
                     blink_receiver_debug_idx = 0;
-                    movement_request_tick_frequency(state->frequency);
+                    movement_request_tick_frequency(state->read_frequency);
                     break;
                 case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:
                 case BLINK_RECEIVER_MODE_RECORD:
