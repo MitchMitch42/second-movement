@@ -191,6 +191,7 @@ uint16_t blink_receiver_read_sensor(void) {
 static void blink_receiver_display_settings(blink_receiver_state_t *state) {
     char buf[6];
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
 
     switch (state->settings_state) {
         case 0:
@@ -204,15 +205,14 @@ static void blink_receiver_display_settings(blink_receiver_state_t *state) {
             watch_display_string(buf, 2);
             break;
         case 2:
-            watch_display_text(WATCH_POSITION_TOP_LEFT, "LL");
-            watch_display_text(WATCH_POSITION_BOTTOM, "      ");
-            snprintf(buf, sizeof(buf), "%5u", state->light_level_border);
-            watch_display_string(buf, 4);
-            break;
-        case 3:
             watch_display_text(WATCH_POSITION_TOP_LEFT, "DF");
             snprintf(buf, sizeof(buf), "%2u", state->idle_frequency);
             watch_display_string(buf, 2);
+            break;
+        case 3:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "LL");
+            snprintf(buf, sizeof(buf), "%5u", state->light_level_border);
+            watch_display_string(buf, 4);
             break;
         default:
             break;
@@ -233,11 +233,11 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
             if (state->samples_per_bit > MAX_SAMPLES_PER_BIT) state->samples_per_bit = 1;
             break;
         case 2:
-            state->light_level_border += 10;
-            if (state->light_level_border > MAX_LIGHT_LEVEL_BORDER) state->light_level_border = MIN_LIGHT_LEVEL_BORDER;
+            state->idle_frequency = state->idle_frequency * 2 > MAX_FREQUENCY ? 1 : state->idle_frequency * 2;
             break;
         case 3:
-            state->idle_frequency = state->idle_frequency * 2 > MAX_FREQUENCY ? 1 : state->idle_frequency * 2;
+            state->light_level_border += 10;
+            if (state->light_level_border > MAX_LIGHT_LEVEL_BORDER) state->light_level_border = MIN_LIGHT_LEVEL_BORDER;
             break;
         default:
             break;
@@ -535,19 +535,15 @@ bool blink_receiver_summarize_samples(uint8_t samples_per_bit, bool *samples) {
     return bright_sample_count >= (samples_per_bit / 2);
 }
 
-void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state, uint16_t subsecond) {
+blink_receiver_mode blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state, uint16_t subsecond) {
     bool bright = blink_receiver_read_sensor() < state->light_level_border;
+    blink_receiver_mode next_mode = waiting_for_start
+        ? BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT
+        : BLINK_RECEIVER_MODE_RECORD;
 
     if (!waiting_for_start || state->samples_received > 0 || bright) {
         state->samples[state->samples_received] = bright;
         state->samples_received++;
-
-        if(state->samples_received == 1) {
-            watch_display_string("        ", 2);
-        }
-        if (state->samples_received <= 8) {
-            watch_display_string(state->samples[state->samples_received - 1] ? "1" : "0", state->samples_received + 1);
-        }
 
         if (state->samples_received == state->samples_per_bit) {
             //enough samples received for a single bit
@@ -563,7 +559,7 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                     }
                     state->sample_history[0] =
                         blink_receiver_pack_samples(state->samples_per_bit, state->samples);
-                    state->mode = BLINK_RECEIVER_MODE_RECORD;
+                    next_mode = BLINK_RECEIVER_MODE_RECORD;
                 }
             } else {
                 //start signal received: record the next packet (32 bit, 32*samples_per_bit samples)
@@ -580,16 +576,17 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                         //another package is coming
                         state->bits_received = 0;
                         state->current_package++;
-                        state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT;
+                        next_mode = BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT;
                     } else {
                         //transmission complete
                         movement_request_tick_frequency(state->idle_frequency);
-                        state->mode = BLINK_RECEIVER_MODE_IDLE;
+                        next_mode = BLINK_RECEIVER_MODE_IDLE;
                     }
                 }
             }
         }
     }
+    return next_mode;
 }
 
 bool blink_receiver_face_loop(movement_event_t event, void *context) {
@@ -610,11 +607,14 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     break;            
                 case BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT:     
                     // listening for start bit
-                    blink_receiver_read_sample(true, state, event.subsecond);
+                    state->mode = blink_receiver_read_sample(true, state, event.subsecond);
+                    if(state->mode == BLINK_RECEIVER_MODE_RECORD) {
+                        watch_display_string("  SAMPLE", 2);
+                    }
                     break;   
                 case BLINK_RECEIVER_MODE_RECORD: 
                     // recording a package    
-                    blink_receiver_read_sample(false, state, event.subsecond);
+                    state->mode = blink_receiver_read_sample(false, state, event.subsecond);
                     break;
                 default: //IDLE and SETTINGS and HISTORY
                     break;
@@ -630,7 +630,7 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     state->samples_received = 0;
                     state->current_package = 0;
                     state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT;
-                    watch_display_string("  SCAN  ", 2);
+                    watch_display_string("  START ", 2);
                     blink_receiver_debug_idx = 0;
                     movement_request_tick_frequency(state->read_frequency);
                     break;
