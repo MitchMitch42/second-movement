@@ -310,7 +310,7 @@ void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond, bool log) 
 }
 
 static void blink_receiver_handle_location(uint32_t packet, bool is_latitude, bool log) {
-    blink_receiver_packet_location_t location_packet = { .reg = packet };
+    blink_receiver_packet_data_t location_packet = { .reg = packet };
     int16_t value = (int16_t)location_packet.location.value;
 
     movement_location_t maybe_location = {0};
@@ -336,7 +336,7 @@ static void blink_receiver_handle_location(uint32_t packet, bool is_latitude, bo
 }
 
 static bool blink_receiver_handle_zone(uint32_t packet, bool log) {
-    blink_receiver_packet_zone_t zone_packet = { .reg = packet };
+    blink_receiver_packet_data_t zone_packet = { .reg = packet };
     if (zone_packet.zone.index >= NUM_ZONE_NAMES) {
         return false;
     }
@@ -354,7 +354,7 @@ static bool blink_receiver_handle_zone(uint32_t packet, bool log) {
 //set local time to received timestamp
 void blink_receiver_handle_timeset(uint32_t packet, bool log)
 {
-    blink_receiver_packet_time_t data = { .reg = packet };
+    blink_receiver_packet_data_t data = { .reg = packet };
     
     watch_date_time_t date_time = movement_get_local_date_time();
     date_time.unit.second = data.time.second;
@@ -379,7 +379,7 @@ void blink_receiver_handle_timeset(uint32_t packet, bool log)
 
 void blink_receiver_handle_patch(uint32_t packet, uint16_t subsecond, uint8_t frequency, bool log)
 {
-    blink_receiver_packet_patch_t data = { .reg = packet };
+    blink_receiver_packet_data_t data = { .reg = packet };
     
     if (data.patch.is_smaller) {
         if ((uint32_t)subsecond * 2 < frequency) {
@@ -408,7 +408,7 @@ void blink_receiver_handle_patch(uint32_t packet, uint16_t subsecond, uint8_t fr
 //set local date to received date
 void blink_receiver_handle_dateset(uint32_t packet, bool log)
 {
-    blink_receiver_packet_date_t data = { .reg = packet };
+    blink_receiver_packet_data_t data = { .reg = packet };
 
     if (log) {
         watch_display_text(WATCH_POSITION_TOP_LEFT, "DA");
