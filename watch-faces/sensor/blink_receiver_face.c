@@ -479,29 +479,12 @@ bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packe
         if (data.header.multipacket) {
             if (state->current_package + 1 < MAX_PACKAGE_COUNT) {
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MU"); //one of multiple packages received
-                if(data.header.immediate) {
-                    // immediate packet: execute it right away
-                    pass = blink_receiver_execute_packet(packet, subsecond, state->read_frequency, false);
-                    if(pass) {
-                        // if current packet was executed successfully, clear the current package
-                        state->current_package--;
-                    }
-                }
-                if(pass) {
-                    return true;
-                }   
+                return true;
             } else {
                 watch_display_text(WATCH_POSITION_TOP_LEFT, "MM"); // too many packages
                 pass = false;
             }
         } else {
-            if (state->current_package > 0) {
-                if(data.header.immediate) {
-                    // immediate packet: execute it right away
-                    pass = blink_receiver_execute_packet(state->packets[state->current_package], subsecond, state->read_frequency, false);
-                    state->current_package--;
-                }
-            }
             for (uint8_t i = 0; i <= state->current_package && pass; i++) {
                 pass= blink_receiver_execute_packet(state->packets[i], subsecond, state->read_frequency, i == state->current_package);
             }
