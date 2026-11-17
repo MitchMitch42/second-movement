@@ -29,23 +29,24 @@
 /*
  * BLINK RECEIVER
  *
- * Receives 32-bit commands encoded as timed light pulses. A bright pulse is a
- * 1 and a dark pulse is a 0. Each packet is transmitted most-significant bit
- * first, with a bright start pulse. Packets in a sequence are separated by a
- * dark stop pulse followed by the next bright start pulse.
+ * Receives 32-bit packets encoded as timed light pulses.
  *
+ * Multi-packet transmissions allow multiple commands to be sent together.
+ * Commands marked immediate are applied as they arrive; other commands are
+ * applied when the transmission is complete. 
+ * 
  * PACKET FORMAT
  *
- *   bit 31       multipacket: 1 means another packet follows
- *   bit 30       immediate: apply this command immediately
- *   bits 29..26  4-bit command type
+ *   6 bit Header:
+ *   bit 31       0 = single packet, 1 = multipacket (means another packet follows)
+ *   bit 30       1 = immediate: apply this command immediately, even if another packet follows
+ *   bits 29..26  command type
+ * 
+ *   18 bit Payload:
  *   bits 25..8   command-specific payload
+ * 
+ *   8 bit Checksum:
  *   bits 7..0    checksum
- *
- * The checksum is the low 8 bits of the sum of the three upper packet bytes
- * (bits 31..8). A packet is dispatched only after its checksum is verified.
- * The receiver buffers packets in a sequence and supports up to
- * MAX_PACKAGE_COUNT packets per transmission.
  *
  * COMMANDS
  *
@@ -56,13 +57,7 @@
  *   LONGITUDE (5)    Store the longitude in the watch's location record.
  *   SET_ZONE (6)     Select and persist a Movement timezone.
  *   TEST (7)         Confirm packet reception with a test command.
- *   PATCH (8)        Adjust the watch time by a signed offset, subject to the
- *                    packet's second-boundary condition.
- *
- * Multi-packet transmissions allow related commands to be sent together.
- * Commands marked immediate are applied as they arrive; other commands are
- * applied when the transmission is complete. A raw packet may also be used
- * to send a supported command that has no dedicated control on the sender.
+ *   PATCH (8)        Adjust the watch time by a signed offset
  *
  * OPERATION
  *
@@ -75,37 +70,21 @@
  * BUTTONS
  *
  *   ALARM press      Start listening, or cancel an active reception.
- *   LIGHT press      Open settings. In settings, advance to the next item and
- *                    leave settings after the final item.
- *   ALARM press in
- *   settings         Advance the selected setting.
- *   ALARM long press Open or close sample history when not listening or in
- *                    settings.
- *   ALARM / LIGHT
- *   in history       Move forward / backward through the sample history.
- *   LIGHT long press Leave settings.
+ *   LIGHT press      Open settings. 
+ *   ALARM long press Open or close sample history
  *
  * SETTINGS
  *
- *   FC  Read frequency. Doubles on each adjustment and wraps to 1 after
- *       MAX_FREQUENCY.
- *   SA  Samples per bit. Cycles through 1..8, 16, and 32.
- *   LL  Light threshold. Advances by LIGHT_LEVEL_BORDER_STEP and wraps from
- *       MAX_LIGHT_LEVEL_BORDER to MIN_LIGHT_LEVEL_BORDER.
- *   DF  Idle display frequency. Doubles on each adjustment and wraps to 1
- *       after MAX_FREQUENCY.
- *
- * Settings are held in the face state and initialized to defaults when that
- * state is first allocated. A valid completed transmission plays a success
- * tone; an invalid checksum, unsupported command, invalid timezone, or
- * over-limit transmission plays a failure tone.
+ *   FC  Frequency for sampling.
+ *   SA  Samples per bit. 
+ *   LL  Light threshold. 
+ *   DF  Frequency when showing the current light level.
  *
  */
 
 #define DEFAULT_LIGHT_LEVEL_BORDER 65200
 #define MIN_LIGHT_LEVEL_BORDER 65100
 #define MAX_LIGHT_LEVEL_BORDER 65500
-#define LIGHT_LEVEL_BORDER_STEP 10
 
 #define DEFAULT_SAMPLES_PER_BIT 8
 #define MAX_SAMPLES_PER_BIT 32

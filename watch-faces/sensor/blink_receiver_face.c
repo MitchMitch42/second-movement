@@ -233,7 +233,7 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
             if (state->samples_per_bit > MAX_SAMPLES_PER_BIT) state->samples_per_bit = 1;
             break;
         case 2:
-            state->light_level_border += LIGHT_LEVEL_BORDER_STEP;
+            state->light_level_border += 10;
             if (state->light_level_border > MAX_LIGHT_LEVEL_BORDER) state->light_level_border = MIN_LIGHT_LEVEL_BORDER;
             break;
         case 3:
