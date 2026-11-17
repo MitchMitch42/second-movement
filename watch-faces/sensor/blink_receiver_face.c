@@ -377,34 +377,6 @@ void blink_receiver_handle_timeset(uint32_t packet, bool log)
     }
 }
 
-void blink_receiver_handle_patch(uint32_t packet, uint16_t subsecond, uint8_t frequency, bool log)
-{
-    blink_receiver_packet_data_t data = { .reg = packet };
-    
-    if (data.patch.is_smaller) {
-        if ((uint32_t)subsecond * 2 < frequency) {
-            movement_set_utc_timestamp(movement_get_utc_timestamp() + (data.patch.is_plus ? data.patch.offset : -data.patch.offset));
-        }
-    } else {
-        if ((uint32_t)subsecond * 2 > frequency) {
-            movement_set_utc_timestamp(movement_get_utc_timestamp() + (data.patch.is_plus ? data.patch.offset : -data.patch.offset));
-        }
-    }
-    
-    if (log) {
-        watch_display_text(WATCH_POSITION_TOP_LEFT, "PA");
-        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
-        char outputString2[3];
-        snprintf(outputString2, 3, "%02d", data.patch.is_smaller);
-        watch_display_string(outputString2, 4);
-        snprintf(outputString2, 3, "%02d", data.patch.is_plus);
-        watch_display_string(outputString2, 6);
-        snprintf(outputString2, 3, "%02d", data.patch.offset);
-        watch_display_string(outputString2, 8);
-    }
-}
-
 //set local date to received date
 void blink_receiver_handle_dateset(uint32_t packet, bool log)
 {
@@ -459,9 +431,6 @@ bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t 
             break;
         case BLINK_RECEIVER_HEADER_TEST:
             watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
-            break;
-        case BLINK_RECEIVER_HEADER_PATCH:
-            blink_receiver_handle_patch(packet, subsecond, frequency, log);
             break;
         default: 
             watch_display_text(WATCH_POSITION_TOP_LEFT, "MH"); // unknown header
