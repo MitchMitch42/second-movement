@@ -105,20 +105,25 @@
  *
  */
 
+// Sensor threshold range.
 #define DEFAULT_LIGHT_LEVEL_BORDER 65200
 #define MIN_LIGHT_LEVEL_BORDER 65100
 #define MAX_LIGHT_LEVEL_BORDER 65500
 
+// Per-bit sensor sampling.
 #define DEFAULT_SAMPLES_PER_BIT 8
 #define MAX_SAMPLES_PER_BIT 32
 
+// Watch tick-rate limits.
 #define DEFAULT_IDLE_FREQUENCY 8
 #define DEFAULT_READ_FREQUENCY 64
 #define MAX_FREQUENCY 128
 
+// Transmission capacity.
 #define BITS_PER_PACKAGE 32
 #define MAX_PACKAGE_COUNT 8
 
+// Packet command identifiers.
 #define BLINK_RECEIVER_HEADER_TIMESET 1
 #define BLINK_RECEIVER_HEADER_DATESET 2
 #define BLINK_RECEIVER_HEADER_HEARTBEAT 3
@@ -128,6 +133,7 @@
 #define BLINK_RECEIVER_HEADER_TEST 7
 #define BLINK_RECEIVER_HEADER_PATCH 8
 
+// Receiver operating modes.
 typedef enum {
   BLINK_RECEIVER_MODE_IDLE,
   BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT,
@@ -137,7 +143,20 @@ typedef enum {
   BLINK_RECEIVER_MODE_HISTORY
 } blink_receiver_mode;
 
+// Shared packet layouts.
 typedef union {
+    struct {
+        uint32_t checksum : 8;
+        uint32_t byte_3 : 8;
+        uint32_t byte_2 : 8;
+        uint32_t byte_1 : 8;
+    } bytes; // Raw bytes
+    struct {
+        uint32_t _ : 26; // Payload and checksum
+        uint32_t type : 4;
+        uint32_t immediate: 1;
+        uint32_t multipacket : 1;
+    } header; // Common flags
     struct {
         uint32_t checksum : 8;
         uint32_t unused : 1;
@@ -145,31 +164,19 @@ typedef union {
         uint32_t minute : 6;
         uint32_t second : 6;
         uint32_t header : 6;
-    } time;
-    uint32_t reg;
-} blink_receiver_packet_time_t;
-
-typedef union {
+    } time; // Time command
     struct {
         uint32_t checksum : 8;
         uint32_t unused : 2;
         uint32_t value : 16;
         uint32_t header : 6;
-    } location;
-    uint32_t reg;
-} blink_receiver_packet_location_t;
-
-typedef union {
+    } location; // Coordinate command
     struct {
         uint32_t checksum : 8;
         uint32_t unused : 12;
         uint32_t index : 6;
         uint32_t header : 6;
-    } zone;
-    uint32_t reg;
-} blink_receiver_packet_zone_t;
-
-typedef union {
+    } zone; // Timezone command
     struct {
         uint32_t checksum : 8;
         uint32_t unused : 3;
@@ -177,11 +184,7 @@ typedef union {
         uint32_t month : 4;
         uint32_t day : 5;
         uint32_t header : 6;
-    } date;
-    uint32_t reg;
-} blink_receiver_packet_date_t;
-
-typedef union {
+    } date; // Date command
     struct {
         uint32_t checksum : 8;
         uint32_t unused : 8;
@@ -189,51 +192,38 @@ typedef union {
         uint32_t is_plus : 1;
         uint32_t is_smaller : 1;
         uint32_t header : 6;
-    } patch;
-    uint32_t reg;
-} blink_receiver_packet_patch_t;
-
-typedef union {
-    struct {
-        uint32_t checksum : 8;
-        uint32_t byte_3 : 8;
-        uint32_t byte_2 : 8;
-        uint32_t byte_1 : 8;
-    } bytes;
-    struct {
-        uint32_t _ : 26;
-        uint32_t type : 4;
-        uint32_t immediate: 1;
-        uint32_t multipacket : 1;
-    } header;
+    } patch; // Time adjustment
     uint32_t reg;
 } blink_receiver_packet_data_t;
 
+// Runtime receiver state.
 typedef struct {
-    blink_receiver_mode mode; 
+    blink_receiver_mode mode; // Current mode
 
-    uint8_t settings_state;
-    uint16_t light_level_border;
-    uint8_t read_frequency;
-    uint8_t idle_frequency;
-    uint8_t samples_per_bit;
+    uint8_t settings_state; // Selected setting
+    uint16_t light_level_border; // Sensor threshold
+    uint8_t read_frequency; // Sampling rate
+    uint8_t idle_frequency; // Display rate
+    uint8_t samples_per_bit; // Samples per bit
 
-    bool *samples;
-    uint32_t *packets;
-    uint8_t samples_received; 
-    int16_t bits_received;  
-    int8_t current_package;
+    bool *samples; // Current bit samples
+    uint32_t *packets; // Buffered packets
+    uint8_t samples_received; // Samples collected
+    int16_t bits_received; // Bits collected
+    int8_t current_package; // Active packet index
 
-    uint16_t *sample_history;
-    uint8_t history_position;
+    uint16_t *sample_history; // Captured sample groups
+    uint8_t history_position; // History cursor
 
 } blink_receiver_state_t;
 
+// Watch-face lifecycle callbacks.
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr);
 void blink_receiver_face_activate(void *context);
 bool blink_receiver_face_loop(movement_event_t event, void *context);
 void blink_receiver_face_resign(void *context);
 
+// Movement face descriptor.
 #define blink_receiver_face ((const watch_face_t){ \
     blink_receiver_face_setup, \
     blink_receiver_face_activate, \
