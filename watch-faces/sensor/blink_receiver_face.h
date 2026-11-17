@@ -117,7 +117,7 @@
 #define MAX_PACKAGE_COUNT 8
 
 // Packet command identifiers.
-#define BLINK_RECEIVER_HEADER_INVALID 0 //Header 0 shall be unused, as receiving 0x00000000 is likely a transmission fail and should not be a valid packet with correct CRC
+// Header 0 shall be unused, as receiving 0x00000000 is likely a transmission fail and should not be a valid packet with correct CRC
 #define BLINK_RECEIVER_HEADER_TIMESET 1
 #define BLINK_RECEIVER_HEADER_DATESET 2
 #define BLINK_RECEIVER_HEADER_HEARTBEAT 3
