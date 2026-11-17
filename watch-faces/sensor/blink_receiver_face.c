@@ -30,8 +30,123 @@
 #include "usb.h"
 #include "adc.h"
 #include "watch.h"
+#include "filesystem.h"
+#include "watch_utility.h"
+#include "zones.h"
 
 //#ifdef HAS_IR_SENSOR
+
+// Descending two-tone fail sound
+static int8_t fail_sound[] = {
+    BUZZER_NOTE_E5, 6,
+    BUZZER_NOTE_REST, 2,
+    BUZZER_NOTE_C4, 12,
+    0
+};
+
+// Ascending three-tone triumph sound
+static int8_t triumph_sound[] = {
+    BUZZER_NOTE_C5, 4,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_E5, 4,
+    BUZZER_NOTE_REST, 1,
+    BUZZER_NOTE_G6, 8,
+    0
+};
+
+#define BR_DEBUG 0
+
+// Each data bit is sampled eight times. The first packet requests a following packet.
+// Packets: 0xA3D8C03B, 0x132370A6.
+bool debug_sample_array[] = {
+    1, 1, 1, 1, 1, 1, 1, 1, // start bit
+
+    // 0xA3D8C03B
+1, 1, 1, 1, 1, 1, 1, 1, // 1 (A)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (3)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+
+1, 1, 1, 1, 1, 1, 1, 1, // 1 (D)
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+
+1, 1, 1, 1, 1, 1, 1, 1, // 1 (8)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+
+1, 1, 1, 1, 1, 1, 1, 1, // 1 (C)
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (0)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (3)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+
+1, 1, 1, 1, 1, 1, 1, 1, // 1 (B)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+1, 1, 1, 1, 1, 1, 1, 1,  // 1
+
+    0, 0, 0, 0, 0, 0, 0, 0, // stop bit
+    1, 1, 1, 1, 1, 1, 1, 1, // start bit
+// 0x132370A6
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (1)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (3)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (2)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (3)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (7)
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (0)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+
+1, 1, 1, 1, 1, 1, 1, 1, // 1 (A)
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+0, 0, 0, 0, 0, 0, 0, 0, // 0
+
+0, 0, 0, 0, 0, 0, 0, 0, // 0 (6)
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+1, 1, 1, 1, 1, 1, 1, 1, // 1
+0, 0, 0, 0, 0, 0, 0, 0  // 0
+};
+
+size_t blink_receiver_debug_idx = 0;
 
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
     (void) watch_face_index;
@@ -40,22 +155,133 @@ void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr) {
         memset(*context_ptr, 0, sizeof(blink_receiver_state_t));
         blink_receiver_state_t *state = (blink_receiver_state_t *) *context_ptr;
 
-        state->light_level_border = 65200; 
-        state->frequency = 8;
-        state->frequency_rising_edge = 8;
+        state->samples = malloc(MAX_SAMPLES_PER_BIT * sizeof(*state->samples));
+        state->sample_history = malloc((BITS_PER_PACKAGE + 1) * sizeof(*state->sample_history));
+        state->packets = malloc(MAX_PACKAGE_COUNT * sizeof(uint32_t));
+        state->light_level_border = DEFAULT_LIGHT_LEVEL_BORDER; 
+        state->samples_per_bit = DEFAULT_SAMPLES_PER_BIT;
+        state->read_frequency = DEFAULT_READ_FREQUENCY;
+        state->idle_frequency = DEFAULT_IDLE_FREQUENCY;
     }
 }
 
 void blink_receiver_face_activate(void *context) {
     (void) context;
+    blink_receiver_state_t *state = (blink_receiver_state_t *)context;
+}
+
+uint16_t blink_receiver_read_sensor(void) {
     HAL_GPIO_IR_ENABLE_out();
     HAL_GPIO_IR_ENABLE_clr();
     HAL_GPIO_IRSENSE_pmuxen(HAL_GPIO_PMUX_ADC);
     adc_init();
     adc_enable();
+    uint16_t ret= adc_get_analog_value(HAL_GPIO_IRSENSE_pin());
+    if (BR_DEBUG) {
+        ret = debug_sample_array[blink_receiver_debug_idx++ % (sizeof(debug_sample_array) / sizeof(debug_sample_array[0]))]
+            ? 0 : UINT16_MAX;
+    }
+    adc_disable();
+    HAL_GPIO_IRSENSE_pmuxdis();
+    HAL_GPIO_IRSENSE_off();
+    HAL_GPIO_IR_ENABLE_off();
+    return ret;
+}
 
-    blink_receiver_state_t *state = (blink_receiver_state_t *)context;
-    movement_request_tick_frequency(state->frequency);
+static void blink_receiver_display_settings(blink_receiver_state_t *state) {
+    char buf[6];
+    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+
+    switch (state->settings_state) {
+        case 0:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "FC");
+            snprintf(buf, sizeof(buf), "%2u", state->read_frequency);
+            watch_display_string(buf, 2);
+            break;
+        case 1:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "SA");
+            snprintf(buf, sizeof(buf), "%2u", state->samples_per_bit);
+            watch_display_string(buf, 2);
+            break;
+        case 2:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "DF");
+            snprintf(buf, sizeof(buf), "%2u", state->idle_frequency);
+            watch_display_string(buf, 2);
+            break;
+        case 3:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "LL");
+            snprintf(buf, sizeof(buf), "%5u", state->light_level_border);
+            watch_display_string(buf, 4);
+            break;
+        default:
+            break;
+    }
+}
+
+static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
+    switch (state->settings_state) {
+        case 0:
+            state->read_frequency = state->read_frequency * 2 > MAX_FREQUENCY ? 1 : state->read_frequency * 2;
+            break;
+        case 1:
+            if (state->samples_per_bit < 8) {
+                state->samples_per_bit += 1;
+            } else {
+                state->samples_per_bit *= 2;
+            }
+            if (state->samples_per_bit > MAX_SAMPLES_PER_BIT) state->samples_per_bit = 1;
+            break;
+        case 2:
+            state->idle_frequency = state->idle_frequency * 2 > MAX_FREQUENCY ? 1 : state->idle_frequency * 2;
+            break;
+        case 3:
+            state->light_level_border += 10;
+            if (state->light_level_border > MAX_LIGHT_LEVEL_BORDER) state->light_level_border = MIN_LIGHT_LEVEL_BORDER;
+            break;
+        default:
+            break;
+    }
+}
+
+static void blink_receiver_go_to_reading_state(blink_receiver_state_t *state) {
+    state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
+    movement_request_tick_frequency(state->idle_frequency);
+    watch_clear_display();
+    watch_display_text_with_fallback(WATCH_POSITION_TOP_LEFT, "BLI", "BL");
+}
+
+static void blink_receiver_display_history(blink_receiver_state_t *state) {
+    char buf[11] = "          ";
+    uint8_t bit_index = state->samples_per_bit > 8
+        ? state->history_position / 2 : state->history_position;
+    uint8_t sample_start = state->samples_per_bit > 8 && state->history_position % 2 ? 8 : 0;
+    uint8_t visible_samples = state->samples_per_bit > sample_start
+        ? state->samples_per_bit - sample_start : 0;
+    if (visible_samples > 8) visible_samples = 8;
+
+    snprintf(buf + 2, 3, "%2u", (unsigned)bit_index);
+    for (uint8_t i = 0; i < visible_samples; i++) {
+        uint8_t sample_index = sample_start + i;
+        uint8_t shift = state->samples_per_bit - sample_index - 1;
+        buf[i < 2 ? i : i + 2] = state->sample_history[bit_index] & (1u << shift) ? '1' : '0';
+    }
+
+    watch_display_string(buf, 0);
+}
+
+static void blink_receiver_move_history(blink_receiver_state_t *state, int8_t direction) {
+    uint8_t history_length = (BITS_PER_PACKAGE + 1) * (state->samples_per_bit > 8 ? 2 : 1);
+    state->history_position = (state->history_position + history_length + direction) % history_length;
+    blink_receiver_display_history(state);
+}
+
+static uint16_t blink_receiver_pack_samples(uint8_t samples_per_bit, bool *samples) {
+    uint16_t pattern = 0;
+    for (uint8_t i = 0; i < samples_per_bit; i++) {
+        pattern = (uint16_t)((pattern << 1) | (samples[i] ? 1u : 0u));
+    }
+    return pattern;
 }
 
 uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_t data_3)
@@ -64,173 +290,333 @@ uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_
     return (uint8_t)(sum & 0xFF);
 }
 
+void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond, bool log) {
+    if (ms > 0) {
+        watch_rtc_enable(false);
+        delay_ms(ms); // delay clock
+        watch_rtc_enable(true);
+    }
+
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "HB");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+        char outputString2[4];
+        snprintf(outputString2, 4, "%3d", ms);
+        watch_display_string(outputString2, 4);
+        snprintf(outputString2, 4, "%3d", subsecond);
+        watch_display_string(outputString2, 7);
+    }
+}
+
+static void blink_receiver_handle_location(uint32_t packet, bool is_latitude, bool log) {
+    blink_receiver_packet_data_t location_packet = { .reg = packet };
+    int16_t value = (int16_t)location_packet.location.value;
+
+    movement_location_t maybe_location = {0};
+    filesystem_read_file("location.u32", (char *) &maybe_location.reg, sizeof(movement_location_t));
+
+    movement_location_t new_location;
+    new_location.bit.latitude = is_latitude ? value : maybe_location.bit.latitude;
+    new_location.bit.longitude = !is_latitude ? value : maybe_location.bit.longitude;
+
+    if (new_location.reg != maybe_location.reg) {
+        filesystem_write_file("location.u32", (char *) &new_location.reg, sizeof(movement_location_t));
+    }
+
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, is_latitude ? "LA" : "LO");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+        char buf[7];
+        snprintf(buf, sizeof(buf), is_latitude ? "%c %04d" : "%c%05d",
+            value < 0 ? '-' : '+', abs(value));
+        watch_display_text(WATCH_POSITION_BOTTOM, buf);
+    }
+}
+
+static bool blink_receiver_handle_zone(uint32_t packet, bool log) {
+    blink_receiver_packet_data_t zone_packet = { .reg = packet };
+    if (zone_packet.zone.index >= NUM_ZONE_NAMES) {
+        return false;
+    }
+
+    movement_set_timezone_index(zone_packet.zone.index);
+    movement_store_settings();
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "ZN");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, (char *)watch_utility_time_zone_name_at_index(zone_packet.zone.index));
+    }
+    return true;
+}
+
 //set local time to received timestamp
-void blink_receiver_handle_timeset(blink_receiver_state_t *state, bool exact)
+void blink_receiver_handle_timeset(uint32_t packet, bool log)
 {
-    watch_display_text(WATCH_POSITION_TOP_LEFT, exact ? "TE" : "TI");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-    watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+    blink_receiver_packet_data_t data = { .reg = packet };
     
     watch_date_time_t date_time = movement_get_local_date_time();
-    date_time.unit.second = state->data >> 22 & 0b111111;
-    date_time.unit.minute = state->data >> 16 & 0b111111;
-    date_time.unit.hour = state->data >> 11 & 0b11111;
+    date_time.unit.second = data.time.second;
+    date_time.unit.minute = data.time.minute;
+    date_time.unit.hour = data.time.hour;
 
-    if(exact) movement_set_local_date_time_exact(date_time, (uint16_t)((((double)state->tick_cnt * 1000.0) / (double)state->frequency) + 0.5));
-    else movement_set_local_date_time(date_time);
+    movement_set_local_date_time(date_time);
 
-    char outputString2[3];
-    snprintf(outputString2, 3, "%02d", state->data >> 11 & 0b11111);
-    watch_display_string(outputString2, 4);
-    snprintf(outputString2, 3, "%02d", state->data >> 16 & 0b111111);
-    watch_display_string(outputString2, 6);
-    snprintf(outputString2, 3, "%02d", state->data >> 22 & 0b111111);
-    watch_display_string(outputString2, 8);
-    watch_set_colon();
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "TI");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+        char outputString2[3];
+        snprintf(outputString2, 3, "%02d", date_time.unit.hour);
+        watch_display_string(outputString2, 4);
+        snprintf(outputString2, 3, "%02d", date_time.unit.minute);
+        watch_display_string(outputString2, 6);
+        snprintf(outputString2, 3, "%02d", date_time.unit.second);
+        watch_display_string(outputString2, 8);
+    }
+}
+
+void blink_receiver_handle_patch(uint32_t packet, uint16_t subsecond, uint8_t frequency, bool log)
+{
+    blink_receiver_packet_data_t data = { .reg = packet };
+    
+    if (data.patch.is_smaller) {
+        if ((uint32_t)subsecond * 2 < frequency) {
+            movement_set_utc_timestamp(movement_get_utc_timestamp() + (data.patch.is_plus ? data.patch.offset : -data.patch.offset));
+        }
+    } else {
+        if ((uint32_t)subsecond * 2 > frequency) {
+            movement_set_utc_timestamp(movement_get_utc_timestamp() + (data.patch.is_plus ? data.patch.offset : -data.patch.offset));
+        }
+    }
+    
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "PA");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+        char outputString2[3];
+        snprintf(outputString2, 3, "%02d", data.patch.is_smaller);
+        watch_display_string(outputString2, 4);
+        snprintf(outputString2, 3, "%02d", data.patch.is_plus);
+        watch_display_string(outputString2, 6);
+        snprintf(outputString2, 3, "%02d", data.patch.offset);
+        watch_display_string(outputString2, 8);
+    }
 }
 
 //set local date to received date
-void blink_receiver_handle_dateset(blink_receiver_state_t *state)
+void blink_receiver_handle_dateset(uint32_t packet, bool log)
 {
-    watch_display_text(WATCH_POSITION_TOP_LEFT, "DA");
-    watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+    blink_receiver_packet_data_t data = { .reg = packet };
 
-    char outputString2[3];
-    snprintf(outputString2, 3, "%02d", state->data >> 23 & 0b11111);
-    watch_display_string(outputString2, 2);
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "DA");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        char outputString2[3];
+        snprintf(outputString2, 3, "%2d", data.date.day);
+        watch_display_string(outputString2, 2);
 
-    snprintf(outputString2, 3, "%02d", state->data >> 19 & 0b1111);
-    watch_display_string(outputString2, 8);
+        snprintf(outputString2, 3, "%02d", data.date.month);
+        watch_display_string(outputString2, 8);
 
-    char outputString4[5];
-    snprintf(outputString4, 5, "%04d", (state->data >> 13 & 0b111111) + 2020);
-    printf(outputString4);
-    watch_display_string(outputString4, 4);
+        char outputString4[5];
+        snprintf(outputString4, 5, "%04d", (data.date.year) + 2020);
+        printf(outputString4);
+        watch_display_string(outputString4, 4);
+    }
     
     watch_date_time_t date_time = movement_get_local_date_time();
-    date_time.unit.day = state->data >> 23 & 0b11111;
-    date_time.unit.month = state->data >> 19 & 0b1111;
-    date_time.unit.year = state->data >> 13 & 0b111111; //todo?
+    date_time.unit.day = data.date.day;
+    date_time.unit.month = data.date.month;
+    date_time.unit.year = data.date.year; 
     movement_set_local_date_time(date_time);
 }
 
-void blink_receiver_handle_totp(blink_receiver_state_t *state) { 
-    watch_display_text(WATCH_POSITION_BOTTOM, "TOTP  "); 
-    // char[]
-    // for (int i = 0; i < 5; i++) {
-    //     uint8_t first = state->packets[i] >> 8 & 0x6;
-    // }
+bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t frequency, bool log) {
+    blink_receiver_packet_data_t data = { .reg = packet };
+    switch(data.header.type) {
+        case BLINK_RECEIVER_HEADER_TIMESET:     
+            blink_receiver_handle_timeset(packet, log);
+            break;
+        case BLINK_RECEIVER_HEADER_DATESET:
+            blink_receiver_handle_dateset(packet, log);
+            break;
+        case BLINK_RECEIVER_HEADER_HEARTBEAT:
+            blink_receiver_handle_heartbeat((uint16_t)((((double)subsecond * 1000.0) / (double)frequency) + 0.5), subsecond, log);
+            break;
+        case BLINK_RECEIVER_HEADER_LATITUDE:
+            blink_receiver_handle_location(packet, true, log);
+            break;
+        case BLINK_RECEIVER_HEADER_LONGITUDE:
+            blink_receiver_handle_location(packet, false, log);
+            break;
+        case BLINK_RECEIVER_HEADER_SET_ZONE:
+            if (!blink_receiver_handle_zone(packet, log)) {
+                watch_display_text(WATCH_POSITION_TOP_LEFT, "MZ"); // unknown zone
+                return false;
+            }
+            break;
+        case BLINK_RECEIVER_HEADER_TEST:
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
+            break;
+        case BLINK_RECEIVER_HEADER_PATCH:
+            blink_receiver_handle_patch(packet, subsecond, frequency, log);
+            break;
+        default: 
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "MH"); // unknown header
+            return false;
+    }
+    return true;
 }
 
-void blink_receiver_handle_packet(blink_receiver_state_t *state, uint8_t header) { 
-    state->packets[header - 8] = state->data;
-}
-
-// Handle the received 4 bytes. First 3 bytes are data, last byte is checksum. 
-void blink_receiver_handle_data(blink_receiver_state_t *state) {
-    uint8_t checksum = blink_receiver_calculate_checksum(state->data >> 24 & 0xFF, state->data >> 16 & 0xFF, state->data >> 8 & 0xFF);
-    if (checksum == (uint8_t)(state->data & 0xFF)) { //checksum ist last 8 bits
-        uint8_t header = (uint8_t)(state->data >> 28 & 0b1111); //header is first 4 bits
-        if (header == 1) blink_receiver_handle_timeset(state, false); // timestamp received
-        else if (header == 2) blink_receiver_handle_dateset(state); // date received
-        else if (header == 3) blink_receiver_handle_timeset(state, true); // exact timestamp received (ms == 0)
-        else if (header >= 8) {
-            blink_receiver_handle_packet(state, header); // data as part of multiple packets received
-            if (header == 15) { // last packet of TOTP received
-                if (state->packets[0] != 0xFFFFFFFF) blink_receiver_handle_totp(state); 
-                else watch_display_text(WATCH_POSITION_BOTTOM, "FAIL"); //at least one packet had wrong crc
+// Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
+bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packet, uint16_t subsecond) {
+    bool pass = true;
+    blink_receiver_packet_data_t data = { .reg = packet };
+    uint8_t checksum = blink_receiver_calculate_checksum(data.bytes.byte_1, data.bytes.byte_2, data.bytes.byte_3);
+    if (checksum == data.bytes.checksum) {
+        if (data.header.multipacket) {
+            if (state->current_package + 1 < MAX_PACKAGE_COUNT) {
+                watch_display_text(WATCH_POSITION_TOP_LEFT, "MU"); //one of multiple packages received
+                if(data.header.immediate) {
+                    // immediate packet: execute it right away
+                    pass = blink_receiver_execute_packet(packet, subsecond, state->read_frequency, false);
+                    if(pass) {
+                        // if current packet was executed successfully, clear the current package
+                        state->current_package--;
+                    }
+                }
+                if(pass) {
+                    return true;
+                }   
+            } else {
+                watch_display_text(WATCH_POSITION_TOP_LEFT, "MM"); // too many packages
+                pass = false;
+            }
+        } else {
+            if (state->current_package > 0) {
+                if(data.header.immediate) {
+                    // immediate packet: execute it right away
+                    pass = blink_receiver_execute_packet(state->packets[state->current_package], subsecond, state->read_frequency, false);
+                    state->current_package--;
+                }
+            }
+            for (uint8_t i = 0; i <= state->current_package && pass; i++) {
+                pass= blink_receiver_execute_packet(state->packets[i], subsecond, state->read_frequency, i == state->current_package);
             }
         }
-        else watch_display_text(WATCH_POSITION_TOP_LEFT, "__"); // unknown header
     } else {
         //wrong checksum
-        state->packets[0] = 0xFFFFFFFF; // invalidate packets 
-        char outputString[3];
+        pass = false;
+        char outputString[9];
         snprintf(outputString, 3, "%02x", checksum);
         watch_display_text(WATCH_POSITION_TOP_LEFT, outputString);
+        snprintf(outputString, 9, "%08x", packet);
+        watch_display_string(outputString, 2);
     }
+    
+    if (pass) {
+        movement_play_sequence(triumph_sound, BUZZER_PRIORITY_ALARM);
+    } else {
+        movement_play_sequence(fail_sound, BUZZER_PRIORITY_ALARM);
+    }
+
+    return false;
+}
+
+bool blink_receiver_summarize_samples(uint8_t samples_per_bit, bool *samples) {
+    uint8_t bright_sample_count = 0;
+    for (int i = 0; i < samples_per_bit; i++) {
+        if (samples[i]) {
+            bright_sample_count++;
+        }
+    }
+    return bright_sample_count >= (samples_per_bit / 2);
+}
+
+blink_receiver_mode blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state, uint16_t subsecond) {
+    bool bright = blink_receiver_read_sensor() < state->light_level_border;
+    blink_receiver_mode next_mode = waiting_for_start
+        ? BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT
+        : BLINK_RECEIVER_MODE_RECORD;
+
+    if (!waiting_for_start || state->samples_received > 0 || bright) {
+        state->samples[state->samples_received] = bright;
+        state->samples_received++;
+
+        if (state->samples_received == state->samples_per_bit) {
+            //enough samples received for a single bit
+            state->samples_received = 0;
+
+            if (waiting_for_start) {
+                if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
+                    //enough bright samples detected: transmission of package has started
+                    state->bits_received = 0;
+                    state->packets[state->current_package] = 0;
+                    for (int i = 0; i <= BITS_PER_PACKAGE; i++) {
+                        state->sample_history[i] = 0;
+                    }
+                    state->sample_history[0] =
+                        blink_receiver_pack_samples(state->samples_per_bit, state->samples);
+                    next_mode = BLINK_RECEIVER_MODE_RECORD;
+                }
+            } else {
+                //start signal received: record the next packet (32 bit, 32*samples_per_bit samples)
+                state->sample_history[state->bits_received + 1] =
+                    blink_receiver_pack_samples(state->samples_per_bit, state->samples);
+                state->packets[state->current_package] = state->packets[state->current_package] << 1;
+                if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
+                    state->packets[state->current_package] += 1;
+                }
+                state->bits_received++;
+
+                if (state->bits_received == BITS_PER_PACKAGE) { // 32bit package complete
+                    if (blink_receiver_process_packet(state, state->packets[state->current_package], subsecond)) {
+                        //another package is coming
+                        state->bits_received = 0;
+                        state->current_package++;
+                        next_mode = BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT;
+                    } else {
+                        //transmission complete
+                        movement_request_tick_frequency(state->idle_frequency);
+                        next_mode = BLINK_RECEIVER_MODE_IDLE;
+                    }
+                }
+            }
+        }
+    }
+    return next_mode;
 }
 
 bool blink_receiver_face_loop(movement_event_t event, void *context) {
     blink_receiver_state_t *state = (blink_receiver_state_t *)context;
-
+    char buf[7];
     switch (event.event_type) {
         case EVENT_NONE:
             break;
         case EVENT_ACTIVATE:
-            watch_display_text_with_fallback(WATCH_POSITION_TOP, "BLINK", "BL");
-            state->last_second = 62;
-            state->mode = BLINK_RECEIVER_MODE_CALC;         
+            blink_receiver_go_to_reading_state(state);
             break;
         case EVENT_TICK:
-            state->tick_cnt = (state->tick_cnt + 1) % state->frequency;        
             switch (state->mode) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
-                    // starting state: show current light value
-                    state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());
-                    char buf[7];
-                    snprintf(buf, 7, "%-6d", state->light_level);
+                    // starting state: show current light value          
+                    snprintf(buf, 7, "%-6d", blink_receiver_read_sensor());
                     watch_display_text(WATCH_POSITION_BOTTOM, buf);
                     break;            
-                case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:        
-                    // watch is polling sensor with increased frequency, waiting for a rising edge (dark -> bright)
-                    watch_display_string("    ", 2); 
-                    watch_display_string("i", 2);                  
-                    watch_display_string("i", 3);
-                    state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());      
-                    watch_display_string("i", 4);                  
-                    watch_display_string("i", 5);
-
-                    char outputStringXXX[3];
-                    snprintf(outputStringXXX, 3, "%02d", state->pollCnt);
-                    state->pollCnt++;
-                    watch_display_string(outputStringXXX, 6);
-
-                    if (state->light_level < state->light_level_border) { //rising edge detected: transmission has started
-                        //watch_buzzer_play_note(BUZZER_NOTE_E6, 100);  
-                        state->bits_received = 0;
-                        state->data = 0;
-                        state->mode = BLINK_RECEIVER_MODE_RECORD;
-                        movement_request_tick_frequency(state->frequency); //switch back to normal frequency for receiving the data
+                case BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT:     
+                    // listening for start bit
+                    state->mode = blink_receiver_read_sample(true, state, event.subsecond);
+                    if(state->mode == BLINK_RECEIVER_MODE_RECORD) {
+                        watch_display_string("  SAMPLE", 2);
                     }
+                    break;   
+                case BLINK_RECEIVER_MODE_RECORD: 
+                    // recording a package    
+                    state->mode = blink_receiver_read_sample(false, state, event.subsecond);
                     break;
-                case BLINK_RECEIVER_MODE_RECORD:     
-                        // read light sensor and save value (dark = 0, bright = 1) to corresponding bit in state->data
-                        watch_display_string("    ", 2); 
-                        watch_display_string("o", 2);                  
-                        watch_display_string("o", 3);
-                        state->light_level = adc_get_analog_value(HAL_GPIO_IRSENSE_pin());           
-                        watch_display_string("o", 4);                  
-                        watch_display_string("o", 5);               
-                        char outputStringXX[3];
-                        snprintf(outputStringXX, 3, "%02d", state->bits_received);
-                        watch_display_string(outputStringXX, 8);
-                        state->data = state->data << 1;
-                        if (state->light_level < state->light_level_border) {         
-                            state->data += 1;              
-                        }
-                        state->bits_received++;
-                        if (state->bits_received == 32) { // transmission complete                 
-                            //watch_buzzer_play_note(BUZZER_NOTE_E6, 100);
-                            //state->data = 0x396F7018;
-                            state->mode = BLINK_RECEIVER_MODE_IDLE;   
-                            char outputString9[9];
-                            snprintf(outputString9, 9, "%08x", state->data);
-                            watch_display_string(outputString9, 2);
-                            blink_receiver_handle_data(state);
-                        }
-                    break;
-                case BLINK_RECEIVER_MODE_CALC:
-                    watch_display_text(WATCH_POSITION_BOTTOM, "CALC"); 
-                    if (state->last_second == 62) {
-                        state->last_second = movement_get_local_date_time().unit.second;
-                    }
-                    else if (movement_get_local_date_time().unit.second != state->last_second) {
-                        state->tick_cnt = 0;
-                        state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
-                    }
-                    break;     
-                default: //IDLE
+                default: //IDLE and SETTINGS and HISTORY
                     break;
             }
             break;
@@ -240,57 +626,90 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                 case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
                 case BLINK_RECEIVER_MODE_IDLE:
                     // start listening
-                    //watch_buzzer_play_note(BUZZER_NOTE_E5, 100);
-                    state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
-                    movement_request_tick_frequency(state->frequency_rising_edge); //increase frequency to make sure that the first rising edge is detected as fast as possible
-                    watch_display_string("        ", 2);
-                    watch_clear_colon();
-                    state->pollCnt = 0;
+                    watch_buzzer_play_note(BUZZER_NOTE_E5, 100);
+                    state->samples_received = 0;
+                    state->current_package = 0;
+                    state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT;
+                    watch_display_string("  START ", 2);
+                    blink_receiver_debug_idx = 0;
+                    movement_request_tick_frequency(state->read_frequency);
                     break;
-                case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:
+                case BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT:
                 case BLINK_RECEIVER_MODE_RECORD:
                     // interrupt listening
                     //watch_buzzer_play_note(BUZZER_NOTE_E4, 200);
-                    state->mode = BLINK_RECEIVER_MODE_IDLE;
-                    movement_request_tick_frequency(state->frequency); //switch back to normal frequency
+                    blink_receiver_go_to_reading_state(state);
+                    break;
+                case BLINK_RECEIVER_MODE_HISTORY:
+                    // move to next history position
+                    blink_receiver_move_history(state, 1);
+                    break;
+                case BLINK_RECEIVER_MODE_SETTING:
+                    // advance setting
+                    blink_receiver_advance_setting(state);
+                    blink_receiver_display_settings(state);
                     break;
                 default:
                     break;
             }
             break;
         case EVENT_ALARM_LONG_PRESS:
-            //change frequency_rising_edge (1 Hz - 64 Hz)
-            state->frequency_rising_edge *= 2;
-            if (state->frequency_rising_edge > 64)
-                state->frequency_rising_edge = 1;
-            char outputString4[3];
-            snprintf(outputString4, 3, "%2d", state->frequency_rising_edge);
-            watch_display_string(outputString4, 2);
-            break;
-        case EVENT_LIGHT_LONG_PRESS:
-            //change frequency (1 Hz - 32 Hz)
-            state->frequency *= 2;
-            if (state->frequency > 32)
-                state->frequency = 1;
-            char outputString3[3];
-            snprintf(outputString3, 3, "%2d", state->frequency);
-            watch_display_string(outputString3, 2);
-            movement_request_tick_frequency(state->frequency);
-            state->last_second = 62;
-            state->mode = BLINK_RECEIVER_MODE_CALC;   
+            switch (state->mode) {
+                case BLINK_RECEIVER_MODE_HISTORY:
+                    // exit history
+                    blink_receiver_go_to_reading_state(state);
+                    break;
+                case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
+                case BLINK_RECEIVER_MODE_IDLE:
+                    // enter history
+                    state->history_position = 0;
+                    state->mode = BLINK_RECEIVER_MODE_HISTORY;
+                    blink_receiver_display_history(state);
+                    break;
+                default:
+                    break;
+            }
             break;
         case EVENT_LIGHT_BUTTON_UP:
-            //change light level border (65400 - 65500)
-            state->light_level_border += 10;
-            if (state->light_level_border > 65500)
-                state->light_level_border = 65100;
-            char outputString6[6];
-            snprintf(outputString6, 6, "%5d", state->light_level_border);
-            watch_display_string("      ", 4);
-            watch_display_string(outputString6, 4);
+            switch (state->mode) {
+                case BLINK_RECEIVER_MODE_HISTORY:
+                    // move to previous history position
+                    blink_receiver_move_history(state, -1);
+                    break;
+                case BLINK_RECEIVER_MODE_SETTING:
+                    // go to next setting
+                    state->settings_state++;
+                    if (state->settings_state > 3) {
+                        blink_receiver_go_to_reading_state(state); // exit settings
+                    } else {
+                        blink_receiver_display_settings(state);
+                    }
+                    break;
+                case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
+                case BLINK_RECEIVER_MODE_IDLE:
+                    // enter settings
+                    state->settings_state = 0;
+                    state->mode = BLINK_RECEIVER_MODE_SETTING;
+                    blink_receiver_display_settings(state);
+                    break;
+                default:
+                    break;
+            }
             break;
-        case EVENT_LIGHT_BUTTON_DOWN:
-            break; //do not illuminate led
+        case EVENT_LIGHT_LONG_PRESS:
+            // exit settings
+            switch (state->mode) {
+                case BLINK_RECEIVER_MODE_SETTING:
+                    blink_receiver_go_to_reading_state(state); // exit settings
+                    break;
+                case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
+                    // idle (to freeze current light value)
+                    state->mode = BLINK_RECEIVER_MODE_IDLE;
+                    break;
+                default:
+                    break;
+            }
+            break;
         case EVENT_TIMEOUT:
             //movement_move_to_face(0);
             break;
@@ -303,11 +722,6 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
 
 void blink_receiver_face_resign(void *context) {
     (void) context;
-
-    adc_disable();
-    HAL_GPIO_IRSENSE_pmuxdis();
-    HAL_GPIO_IRSENSE_off();
-    HAL_GPIO_IR_ENABLE_off();
 }
 
 //#endif // HAS_IR_SENSOR
