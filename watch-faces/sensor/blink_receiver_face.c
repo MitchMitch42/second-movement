@@ -710,6 +710,8 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     break;
             }
             break;
+        case EVENT_LIGHT_BUTTON_DOWN:
+            break; //led suppressed
         case EVENT_TIMEOUT:
             //movement_move_to_face(0);
             break;
