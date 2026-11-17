@@ -1,7 +1,7 @@
 /*
  * MIT License
  *
- * Copyright (c) 2026 <#author_name#>
+ * Copyright (c) 2026 Mitch
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -100,8 +100,8 @@
 
 // Sensor threshold range.
 #define DEFAULT_LIGHT_LEVEL_BORDER 65200
-#define MIN_LIGHT_LEVEL_BORDER 65100
-#define MAX_LIGHT_LEVEL_BORDER 65500
+#define MIN_LIGHT_LEVEL_BORDER 65050
+#define MAX_LIGHT_LEVEL_BORDER 65530
 
 // Per-bit sensor sampling.
 #define DEFAULT_SAMPLES_PER_BIT 8
@@ -109,7 +109,7 @@
 
 // Watch tick-rate limits.
 #define DEFAULT_IDLE_FREQUENCY 8
-#define DEFAULT_READ_FREQUENCY 64
+#define DEFAULT_READ_FREQUENCY 128
 #define MAX_FREQUENCY 128
 
 // Transmission capacity.
