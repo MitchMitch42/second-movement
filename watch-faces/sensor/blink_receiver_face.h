@@ -29,25 +29,48 @@
 /*
  * BLINK RECEIVER
  *
- * Receives 32-bit packets encoded as timed light pulses.
+ * Using the light sensor to receive data encoded as timed light pulses. 
+ * A bright sensor reading is a 1 and a dark reading is a 0. 
+ * You can use a computer or phone screen to flicker dark and bright, transmitting data to the watch. 
+ * The watch face can be used to set the time, date, and location, 
+ * as well as to synchronize the watch clock to a received signal.
  *
- * Multi-packet transmissions allow multiple commands to be sent together.
- * Commands marked immediate are applied as they arrive; other commands are
- * applied when the transmission is complete. 
+ * 
+ * TRANSMISSION
+ *
+ *   1. Press ALARM to listen. The receiver requests read_frequency sensor
+ *      readings per second and waits for a bright start bit. Dark readings
+ *      are ignored while it waits.
+ * 
+ *   2. After detecting the start bit, the receiver collects 32 data bits,
+ *      most-significant bit first. For each bit it takes samples_per_bit
+ *      sensor readings, making the readout more stable. 
+ *      The transmission frequency of the sender is: 
+ *      Transmission frequency = read_frequency / samples_per_bit
+ * 
+ *   3. After 32 bits, the checksum is verified. 
+ *      If the immediate bit is set, the command is executed immediately. 
+ *      If the multipacket bit is set in the command, the watch stays in receiving mode and
+ *      waits for the next packet, which must again be indicated by a bright start bit. 
+ *      When a packet without the multipacket bit is received, the buffered packets, including this final
+ *      packet, are executed in packet order. Processing stops on the first
+ *      command error. The receiver plays a success tone if all commands pass,
+ *      or a failure tone if checksum or command processing fails. 
+ *      It then enters idle mode.
+ *
  * 
  * PACKET FORMAT
  *
- *   6 bit Header:
- *   bit 31       0 = single packet, 1 = multipacket (means another packet follows)
- *   bit 30       1 = immediate: apply this command immediately, even if another packet follows
- *   bits 29..26  command type
+ *   Header:
+ *   bit 31       multipacket: The multipacket bit indicates that another packet follows. 
+ *   bit 30       immediate: request execution as soon as the packet arrives
+ *   bits 29..26  4-bit command type
  * 
- *   18 bit Payload:
- *   bits 25..8   command-specific payload
+ *   bits 25..8   18-bit payload
  * 
- *   8 bit Checksum:
  *   bits 7..0    checksum
  *
+ * 
  * COMMANDS
  *
  *   TIMESET (1)      Set the watch's local time.
@@ -56,30 +79,60 @@
  *   LATITUDE (4)     Store the latitude in the watch's location record.
  *   LONGITUDE (5)    Store the longitude in the watch's location record.
  *   SET_ZONE (6)     Select and persist a Movement timezone.
- *   TEST (7)         Confirm packet reception with a test command.
- *   PATCH (8)        Adjust the watch time by a signed offset
+ *   TEST (7)         Dummy command for testing the checksum and command processing.
+ *   PATCH (8)        Apply a signed time offset.
  *
- * OPERATION
- *
- *   Idle             The bottom row displays the current light-sensor reading.
- *   Listening        The sensor is sampled at the configured read frequency;
- *                    samples_per_bit readings are grouped to decode each bit.
- *   Settings         Adjust reception and display parameters.
- *   History          Inspect the recorded samples from packet reception.
- *
+ * Payload layouts are documented by the packet unions below. Related commands
+ * can be sent in one multi-packet transmission; multipacket indicates whether
+ * another packet follows, and immediate requests that a command shall be applied
+ * before the transmission is complete.
+ * 
+ * 
  * BUTTONS
  *
- *   ALARM press      Start listening, or cancel an active reception.
- *   LIGHT press      Open settings. 
- *   ALARM long press Open or close sample history
+ *   ALARM short press
+ *                    Start listening from idle/display mode, or cancel while
+ *                    waiting for a start bit or receiving a packet.
+ *   LIGHT short press
+ *                    Open settings outside reception, or advance to the next
+ *                    setting while in settings.
+ *   ALARM press in
+ *   settings         Increase the selected setting. In history, ALARM moves
+ *                    forward through the recorded sample groups.
+ *   ALARM long press Open history when not listening or in settings; close it
+ *                    when history is already open.
+ *   LIGHT press in
+ *   history          Move backward through the recorded sample groups.
+ *   LIGHT long press Leave settings.
  *
  * SETTINGS
  *
- *   FC  Frequency for sampling.
- *   SA  Samples per bit. 
- *   LL  Light threshold. 
- *   DF  Frequency when showing the current light level.
+ *   FC  Read frequency in sensor readings per second. Doubles on each press
+ *       and wraps to 1 after MAX_FREQUENCY.
+ *   SA  Sensor readings grouped to decode one bit. Cycles through 1..8, 16,
+ *       and 32. At SA=1, the integer threshold treats a bit as bright even if
+ *       its only reading is dark.
+ *   LL  Light threshold. Increases by 10 and wraps from
+ *       MAX_LIGHT_LEVEL_BORDER to MIN_LIGHT_LEVEL_BORDER.
+ *   DF  Idle light-display frequency in ticks per second. Doubles on each
+ *       press and wraps to 1 after MAX_FREQUENCY.
  *
+ * Values are initialized to their defaults when the face state is allocated;
+ * they are not saved as persistent settings.
+ *
+ * STATUS AND ERRORS
+ *
+ *   MU  A valid packet says another packet follows; the receiver is listening.
+ *   MM  The packet limit was reached while another packet was indicated.
+ *   MZ  SET_ZONE contained an invalid timezone index.
+ *   MH  The packet contains an unsupported command type.
+ *   Two-digit hexadecimal value
+ *       The checksum calculated from the packet; the packet was rejected.
+ *
+ * Checksum errors and command failures play the failure tone. A successful
+ * completed transmission plays the success tone. During sampling, the display
+ * also shows current sensor samples; settings and history replace the idle
+ * light reading.
  */
 
 #define DEFAULT_LIGHT_LEVEL_BORDER 65200
