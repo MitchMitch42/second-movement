@@ -48,7 +48,6 @@
  *      Transmission frequency = read_frequency / samples_per_bit
  * 
  *   3. After 32 bits, the checksum is verified. 
- *      If the immediate bit is set, the command is executed immediately. 
  *      If the multipacket bit is set in the command, the watch stays in receiving mode and
  *      waits for the next packet, which must again be indicated by a bright start bit. 
  *      When a packet without the multipacket bit is received, the buffered packets, including this final
@@ -60,12 +59,12 @@
  * PACKET FORMAT
  *
  *   Header:
- *   bit 31       multipacket: another packet follows
- *   bits 30..27  4-bit command type
+ *   bit 31      multipacket: another packet follows
+ *   bit 30..27  4-bit command type
  * 
- *   bits 26..8   19-bit payload
+ *   bit 26..8   19-bit payload
  * 
- *   bits 7..0    checksum
+ *   bit 7..0    checksum
  * 
  * COMMANDS
  *
@@ -76,11 +75,8 @@
  *   LONGITUDE (5)    Store the longitude in the watch's location record.
  *   SET_ZONE (6)     Select and persist a Movement timezone.
  *   TEST (7)         Dummy command for testing the checksum and command processing.
- *   PATCH (8)        Apply a signed time offset.
  *
- * Payload layouts are documented by the packet unions below. Related commands
- * can be sent in one multi-packet transmission; the receiver applies buffered
- * commands when it receives the final packet.
+ * Payload layouts are documented by the packet unions below. 
  * 
  * BUTTONS
  *
@@ -100,7 +96,6 @@
  *   MH  The packet contains an unsupported command type.
  *   MM  The packet limit was reached while another packet was indicated.
  *   MZ  SET_ZONE contained an invalid timezone index.
- *
  */
 
 // Sensor threshold range.
@@ -122,6 +117,7 @@
 #define MAX_PACKAGE_COUNT 8
 
 // Packet command identifiers.
+#define BLINK_RECEIVER_HEADER_INVALID 0 //Header 0 shall be unused, as receiving 0x00000000 is likely a transmission fail and should not be a valid packet with correct CRC
 #define BLINK_RECEIVER_HEADER_TIMESET 1
 #define BLINK_RECEIVER_HEADER_DATESET 2
 #define BLINK_RECEIVER_HEADER_HEARTBEAT 3
@@ -129,7 +125,6 @@
 #define BLINK_RECEIVER_HEADER_LONGITUDE 5
 #define BLINK_RECEIVER_HEADER_SET_ZONE 6
 #define BLINK_RECEIVER_HEADER_TEST 7
-#define BLINK_RECEIVER_HEADER_PATCH 8
 
 // Receiver operating modes.
 typedef enum {
@@ -182,14 +177,6 @@ typedef union {
         uint32_t day : 5;
         uint32_t header : 5;
     } date; // Date command
-    struct {
-        uint32_t checksum : 8;
-        uint32_t unused : 9;
-        uint32_t offset : 8;
-        uint32_t is_plus : 1;
-        uint32_t is_smaller : 1;
-        uint32_t header : 5;
-    } patch; // Time adjustment command
     uint32_t reg;
 } blink_receiver_packet_data_t;
 
