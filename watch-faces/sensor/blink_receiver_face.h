@@ -60,11 +60,10 @@
  * PACKET FORMAT
  *
  *   Header:
- *   bit 31       multipacket: The multipacket bit indicates that another packet follows. 
- *   bit 30       immediate: request execution as soon as the packet arrives
- *   bits 29..26  4-bit command type
+ *   bit 31       multipacket: another packet follows
+ *   bits 30..27  4-bit command type
  * 
- *   bits 25..8   18-bit payload
+ *   bits 26..8   19-bit payload
  * 
  *   bits 7..0    checksum
  * 
@@ -80,9 +79,8 @@
  *   PATCH (8)        Apply a signed time offset.
  *
  * Payload layouts are documented by the packet unions below. Related commands
- * can be sent in one multi-packet transmission; multipacket indicates whether
- * another packet follows, and immediate requests that a command shall be applied
- * before the transmission is complete.
+ * can be sent in one multi-packet transmission; the receiver applies buffered
+ * commands when it receives the final packet.
  * 
  * BUTTONS
  *
@@ -152,46 +150,45 @@ typedef union {
         uint32_t byte_1 : 8;
     } bytes; // Raw bytes
     struct {
-        uint32_t _ : 26; // Payload and checksum
+        uint32_t _ : 27; // Payload and checksum
         uint32_t type : 4;
-        uint32_t immediate: 1;
         uint32_t multipacket : 1;
     } header; // Header
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 1;
+        uint32_t unused : 2;
         uint32_t hour : 5;
         uint32_t minute : 6;
         uint32_t second : 6;
-        uint32_t header : 6;
+        uint32_t header : 5;
     } time; // Time command
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 2;
+        uint32_t unused : 3;
         uint32_t value : 16;
-        uint32_t header : 6;
+        uint32_t header : 5;
     } location; // Coordinate command
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 12;
+        uint32_t unused : 13;
         uint32_t index : 6;
-        uint32_t header : 6;
+        uint32_t header : 5;
     } zone; // Timezone command
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 3;
+        uint32_t unused : 4;
         uint32_t year : 6;
         uint32_t month : 4;
         uint32_t day : 5;
-        uint32_t header : 6;
+        uint32_t header : 5;
     } date; // Date command
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 8;
+        uint32_t unused : 9;
         uint32_t offset : 8;
         uint32_t is_plus : 1;
         uint32_t is_smaller : 1;
-        uint32_t header : 6;
+        uint32_t header : 5;
     } patch; // Time adjustment command
     uint32_t reg;
 } blink_receiver_packet_data_t;
