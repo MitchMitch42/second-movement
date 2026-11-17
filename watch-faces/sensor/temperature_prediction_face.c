@@ -107,7 +107,7 @@ static void temperature_prediction_face_calculate_ema(temperature_prediction_sta
         
         float error = fabs(state->ema - end_temperature);
         alpha = 2.0f / (30 + 1); // Alpha = 2 / (N + 1), where N is the number of periods (TODO: currently fixed at 30)
-        state->ema_error = state->ema_error == -999 ? error : ((error * alpha2) + (state->ema_error * (1 - alpha2))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))       
+        state->ema_error = state->ema_error == -999 ? error : ((error * alpha) + (state->ema_error * (1 - alpha))); //EMA = (Value * Alpha) + (EMA_Before * (1 - Alpha))       
     }
 }
 
