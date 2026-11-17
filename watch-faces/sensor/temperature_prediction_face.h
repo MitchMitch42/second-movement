@@ -56,17 +56,12 @@ typedef struct {
     bool show_real_temperature;         // if true: show the raw temperature, not the calculated one 
     bool quick_ticks_running;           // if true: the user is holding down button to quickly advance through settings
     bool apply_hack;                    // TODO
-    int error_mode;                     // TODO
-    float variance;                     // TODO
-    float variance_max;                     // TODO
-    temperature_prediction_rolling_buffer_t calculated_averages;     // rolling buffer holding averaged temperatures
     
-
     // settings
     float coefficient;                  // heat transfer coefficient
     int buffer_size;                    // how many raw datapoints shall be used for the estimation
     int average_count;                  // time periods for ema
-    int cap;                            // reset ema when diff between last calculated temp and current calculated temp is higher than cap, to prevent 
+    int cap;                            // reset ema when diff between last calculated temp and current calculated temp is higher than cap, to prevent the ema getting messed up 
     bool start_coefficient_calculation; // to start the coefficient calculation process
 } temperature_prediction_state_t;
 
