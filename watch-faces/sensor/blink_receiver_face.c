@@ -509,9 +509,11 @@ bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packe
     } else {
         //wrong checksum
         pass = false;
-        char outputString[3];
+        char outputString[9];
         snprintf(outputString, 3, "%02x", checksum);
         watch_display_text(WATCH_POSITION_TOP_LEFT, outputString);
+        snprintf(outputString, 9, "%08x", packet);
+        watch_display_string(outputString, 2);
     }
     
     if (pass) {
@@ -578,7 +580,7 @@ void blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *
                         //another package is coming
                         state->bits_received = 0;
                         state->current_package++;
-                        state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
+                        state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT;
                     } else {
                         //transmission complete
                         movement_request_tick_frequency(state->idle_frequency);
@@ -606,10 +608,12 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     snprintf(buf, 7, "%-6d", blink_receiver_read_sensor());
                     watch_display_text(WATCH_POSITION_BOTTOM, buf);
                     break;            
-                case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:     
+                case BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT:     
+                    // listening for start bit
                     blink_receiver_read_sample(true, state, event.subsecond);
                     break;   
-                case BLINK_RECEIVER_MODE_RECORD:     
+                case BLINK_RECEIVER_MODE_RECORD: 
+                    // recording a package    
                     blink_receiver_read_sample(false, state, event.subsecond);
                     break;
                 default: //IDLE and SETTINGS and HISTORY
@@ -625,66 +629,86 @@ bool blink_receiver_face_loop(movement_event_t event, void *context) {
                     watch_buzzer_play_note(BUZZER_NOTE_E5, 100);
                     state->samples_received = 0;
                     state->current_package = 0;
-                    state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE;
+                    state->mode = BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT;
                     watch_display_string("  SCAN  ", 2);
                     blink_receiver_debug_idx = 0;
                     movement_request_tick_frequency(state->read_frequency);
                     break;
-                case BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE:
+                case BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT:
                 case BLINK_RECEIVER_MODE_RECORD:
                     // interrupt listening
                     //watch_buzzer_play_note(BUZZER_NOTE_E4, 200);
                     blink_receiver_go_to_reading_state(state);
+                    break;
+                case BLINK_RECEIVER_MODE_HISTORY:
+                    // move to next history position
+                    blink_receiver_move_history(state, 1);
+                    break;
+                case BLINK_RECEIVER_MODE_SETTING:
+                    // advance setting
+                    blink_receiver_advance_setting(state);
+                    blink_receiver_display_settings(state);
                     break;
                 default:
                     break;
             }
             break;
         case EVENT_ALARM_LONG_PRESS:
-            if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
-                //exit history
-                blink_receiver_go_to_reading_state(state);
-            } else if (state->mode != BLINK_RECEIVER_MODE_SETTING
-                && state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE
-                && state->mode != BLINK_RECEIVER_MODE_RECORD) {
-                //enter history
-                state->history_position = 0;
-                state->mode = BLINK_RECEIVER_MODE_HISTORY;
-                blink_receiver_display_history(state);
-            }
-            break;
-        case EVENT_ALARM_BUTTON_DOWN:
-            if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
-                blink_receiver_move_history(state, 1);
-            } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
-                blink_receiver_advance_setting(state);
-                blink_receiver_display_settings(state);
-            }
-            break;
-        case EVENT_LIGHT_LONG_PRESS:
-            if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
-                break;
-            } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
-                blink_receiver_go_to_reading_state(state); // exit settings
-            }
-            break;
-        case EVENT_LIGHT_BUTTON_DOWN:
-            if (state->mode == BLINK_RECEIVER_MODE_HISTORY) {
-                blink_receiver_move_history(state, -1);
-            } else if (state->mode == BLINK_RECEIVER_MODE_SETTING) {
-                state->settings_state++;
-                if (state->settings_state > 3) {
-                    blink_receiver_go_to_reading_state(state); // exit settings
-                } else {
-                    blink_receiver_display_settings(state);
-                }
-            } else if (state->mode != BLINK_RECEIVER_MODE_WAIT_FOR_RISING_EDGE && state->mode != BLINK_RECEIVER_MODE_RECORD) {
-                state->settings_state = 0;
-                state->mode = BLINK_RECEIVER_MODE_SETTING;
-                blink_receiver_display_settings(state);
+            switch (state->mode) {
+                case BLINK_RECEIVER_MODE_HISTORY:
+                    // exit history
+                    blink_receiver_go_to_reading_state(state);
+                    break;
+                case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
+                case BLINK_RECEIVER_MODE_IDLE:
+                    // enter history
+                    state->history_position = 0;
+                    state->mode = BLINK_RECEIVER_MODE_HISTORY;
+                    blink_receiver_display_history(state);
+                    break;
+                default:
+                    break;
             }
             break;
         case EVENT_LIGHT_BUTTON_UP:
+            switch (state->mode) {
+                case BLINK_RECEIVER_MODE_HISTORY:
+                    // move to previous history position
+                    blink_receiver_move_history(state, -1);
+                    break;
+                case BLINK_RECEIVER_MODE_SETTING:
+                    // go to next setting
+                    state->settings_state++;
+                    if (state->settings_state > 3) {
+                        blink_receiver_go_to_reading_state(state); // exit settings
+                    } else {
+                        blink_receiver_display_settings(state);
+                    }
+                    break;
+                case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
+                case BLINK_RECEIVER_MODE_IDLE:
+                    // enter settings
+                    state->settings_state = 0;
+                    state->mode = BLINK_RECEIVER_MODE_SETTING;
+                    blink_receiver_display_settings(state);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case EVENT_LIGHT_LONG_PRESS:
+            // exit settings
+            switch (state->mode) {
+                case BLINK_RECEIVER_MODE_SETTING:
+                    blink_receiver_go_to_reading_state(state); // exit settings
+                    break;
+                case BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT:
+                    // idle (to freeze current light value)
+                    state->mode = BLINK_RECEIVER_MODE_IDLE;
+                    break;
+                default:
+                    break;
+            }
             break;
         case EVENT_TIMEOUT:
             //movement_move_to_face(0);
