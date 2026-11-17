@@ -156,7 +156,7 @@ typedef union {
         uint32_t type : 4;
         uint32_t immediate: 1;
         uint32_t multipacket : 1;
-    } header; // Common flags
+    } header; // Header
     struct {
         uint32_t checksum : 8;
         uint32_t unused : 1;
@@ -192,11 +192,10 @@ typedef union {
         uint32_t is_plus : 1;
         uint32_t is_smaller : 1;
         uint32_t header : 6;
-    } patch; // Time adjustment
+    } patch; // Time adjustment command
     uint32_t reg;
 } blink_receiver_packet_data_t;
 
-// Runtime receiver state.
 typedef struct {
     blink_receiver_mode mode; // Current mode
 
@@ -217,13 +216,11 @@ typedef struct {
 
 } blink_receiver_state_t;
 
-// Watch-face lifecycle callbacks.
 void blink_receiver_face_setup(uint8_t watch_face_index, void ** context_ptr);
 void blink_receiver_face_activate(void *context);
 bool blink_receiver_face_loop(movement_event_t event, void *context);
 void blink_receiver_face_resign(void *context);
 
-// Movement face descriptor.
 #define blink_receiver_face ((const watch_face_t){ \
     blink_receiver_face_setup, \
     blink_receiver_face_activate, \
