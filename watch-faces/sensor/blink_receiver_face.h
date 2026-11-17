@@ -29,13 +29,12 @@
 /*
  * BLINK RECEIVER
  *
- * Using the light sensor to receive data encoded as timed light pulses. 
- * A bright sensor reading is a 1 and a dark reading is a 0. 
- * You can use a computer or phone screen to flicker dark and bright, transmitting data to the watch. 
- * The watch face can be used to set the time, date, and location, 
+ * Receives data encoded as timed light pulses through the watch's light
+ * sensor. Bright and dark pulses represent binary values, allowing a
+ * computer or phone display to transmit commands to the watch. 
+ * This can be used to set the time, date, and location, 
  * as well as to synchronize the watch clock to a received signal.
  *
- * 
  * TRANSMISSION
  *
  *   1. Press ALARM to listen. The receiver requests read_frequency sensor
@@ -58,7 +57,6 @@
  *      or a failure tone if checksum or command processing fails. 
  *      It then enters idle mode.
  *
- * 
  * PACKET FORMAT
  *
  *   Header:
@@ -69,7 +67,6 @@
  *   bits 25..8   18-bit payload
  * 
  *   bits 7..0    checksum
- *
  * 
  * COMMANDS
  *
@@ -87,52 +84,25 @@
  * another packet follows, and immediate requests that a command shall be applied
  * before the transmission is complete.
  * 
- * 
  * BUTTONS
  *
- *   ALARM short press
- *                    Start listening from idle/display mode, or cancel while
- *                    waiting for a start bit or receiving a packet.
- *   LIGHT short press
- *                    Open settings outside reception, or advance to the next
- *                    setting while in settings.
- *   ALARM press in
- *   settings         Increase the selected setting. In history, ALARM moves
- *                    forward through the recorded sample groups.
- *   ALARM long press Open history when not listening or in settings; close it
- *                    when history is already open.
- *   LIGHT press in
- *   history          Move backward through the recorded sample groups.
- *   LIGHT long press Leave settings.
- *
+ *   ALARM press      Start listening, or cancel an active reception.
+ *   LIGHT press      Open settings. 
+ *   ALARM long press Open or close sample history
+ * 
  * SETTINGS
  *
- *   FC  Read frequency in sensor readings per second. Doubles on each press
- *       and wraps to 1 after MAX_FREQUENCY.
- *   SA  Sensor readings grouped to decode one bit. Cycles through 1..8, 16,
- *       and 32. At SA=1, the integer threshold treats a bit as bright even if
- *       its only reading is dark.
- *   LL  Light threshold. Increases by 10 and wraps from
- *       MAX_LIGHT_LEVEL_BORDER to MIN_LIGHT_LEVEL_BORDER.
- *   DF  Idle light-display frequency in ticks per second. Doubles on each
- *       press and wraps to 1 after MAX_FREQUENCY.
+ *   FC  Frequency for sampling.
+ *   SA  Samples per bit. 
+ *   LL  Light threshold. 
+ *   DF  Frequency when showing the current light level.
+ * 
+ * ERROR CODES
  *
- * Values are initialized to their defaults when the face state is allocated;
- * they are not saved as persistent settings.
- *
- * STATUS AND ERRORS
- *
- *   MU  A valid packet says another packet follows; the receiver is listening.
+ *   MH  The packet contains an unsupported command type.
  *   MM  The packet limit was reached while another packet was indicated.
  *   MZ  SET_ZONE contained an invalid timezone index.
- *   MH  The packet contains an unsupported command type.
- *   Two-digit hexadecimal value
- *       The checksum calculated from the packet; the packet was rejected.
  *
- * Checksum errors and command failures play the failure tone. A successful
- * completed transmission plays the success tone. During sampling, the display
- * also shows current sensor samples; settings and history replace the idle
- * light reading.
  */
 
 #define DEFAULT_LIGHT_LEVEL_BORDER 65200
