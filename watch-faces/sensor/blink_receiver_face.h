@@ -42,19 +42,20 @@
  *      are ignored while it waits.
  * 
  *   2. After detecting the start bit, the receiver collects 32 data bits,
- *      most-significant bit first. For each bit it takes samples_per_bit
- *      sensor readings, making the readout more stable. 
+ *      most-significant bit first. For each bit it takes n sensor readings, 
+ *      making the readout more stable. After n readings, the watch decides 
+ *      if a bright or dark bit has been received.
  *      The transmission frequency of the sender is: 
  *      Transmission frequency = read_frequency / samples_per_bit
  * 
- *   3. After 32 bits, the checksum is verified. 
- *      If the multipacket bit is set in the command, the watch stays in receiving mode and
+ *   3. After 32 bits, the checksum is verified, and the header is checked.
+ *      If the multipacket bit is set in the header, the watch stays in receiving mode and
  *      waits for the next packet, which must again be indicated by a bright start bit. 
  *      When a packet without the multipacket bit is received, the buffered packets, including this final
  *      packet, are executed in packet order. Processing stops on the first
  *      command error. The receiver plays a success tone if all commands pass,
  *      or a failure tone if checksum or command processing fails. 
- *      It then enters idle mode.
+ *      The watch then enters idle mode.
  *
  * PACKET FORMAT
  *
@@ -100,16 +101,16 @@
 
 // Sensor threshold range.
 #define DEFAULT_LIGHT_LEVEL_BORDER 65200
-#define MIN_LIGHT_LEVEL_BORDER 65050
+#define MIN_LIGHT_LEVEL_BORDER 64000
 #define MAX_LIGHT_LEVEL_BORDER 65530
 
-// Per-bit sensor sampling.
+// Sampling
 #define DEFAULT_SAMPLES_PER_BIT 8
 #define MAX_SAMPLES_PER_BIT 32
 
-// Watch tick-rate limits.
+// Frequencies
 #define DEFAULT_IDLE_FREQUENCY 8
-#define DEFAULT_READ_FREQUENCY 128
+#define DEFAULT_READ_FREQUENCY 64
 #define MAX_FREQUENCY 128
 
 // Transmission capacity.
@@ -184,7 +185,7 @@ typedef struct {
     blink_receiver_mode mode; // Current mode
 
     uint8_t settings_state; // Selected setting
-    uint16_t light_level_border; // Sensor threshold
+    uint32_t light_level_border; // Sensor threshold: anything below this value is considered bright, above this value is considered dark
     uint8_t read_frequency; // Sampling rate
     uint8_t idle_frequency; // Display rate
     uint8_t samples_per_bit; // Samples per bit

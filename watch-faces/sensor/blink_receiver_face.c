@@ -467,14 +467,14 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
             state->read_frequency = state->read_frequency * 2 > MAX_FREQUENCY ? 1 : state->read_frequency * 2;
             break;
         case 1:
-            state->samples_per_bit = state->samples_per_bit < 8 ? state->samples_per_bit + 1 : state->samples_per_bit * 2;
+            state->samples_per_bit = state->samples_per_bit < 16 ? state->samples_per_bit + 1 : state->samples_per_bit * 2;
             if (state->samples_per_bit > MAX_SAMPLES_PER_BIT) state->samples_per_bit = 1;
             break;
         case 2:
             state->idle_frequency = state->idle_frequency * 2 > MAX_FREQUENCY ? 1 : state->idle_frequency * 2;
             break;
         case 3:
-            state->light_level_border += 10;
+            state->light_level_border += 50;
             if (state->light_level_border > MAX_LIGHT_LEVEL_BORDER) state->light_level_border = MIN_LIGHT_LEVEL_BORDER;
             break;
         default:
