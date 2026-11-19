@@ -148,6 +148,9 @@ bool debug_sample_array[] = {
 // Transmission 
 // ---------------------------
 
+/**
+ * @brief Reads the light sensor.
+ */
 uint16_t blink_receiver_read_sensor(void) {
     HAL_GPIO_IR_ENABLE_out();
     HAL_GPIO_IR_ENABLE_clr();
@@ -166,12 +169,18 @@ uint16_t blink_receiver_read_sensor(void) {
     return ret;
 }
 
+/**
+ * @brief Calculates the packet checksum.
+ */
 uint8_t blink_receiver_calculate_checksum(uint8_t data_1, uint8_t data_2, uint8_t data_3)
 {
     uint32_t sum = (uint32_t)data_1 + (uint32_t)data_2 + (uint32_t)data_3;
     return (uint8_t)(sum & 0xFF);
 }
 
+/**
+ * @brief Executes a received command.
+ */
 bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t frequency, bool log) {
     blink_receiver_packet_data_t data = { .reg = packet };
     switch(data.header.type) {
@@ -206,7 +215,9 @@ bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t 
     return true;
 }
 
-// Handle the received 32 bits. First 3 bytes are data, last byte is checksum. 
+/**
+ * @brief Validates and processes a received packet.
+ */
 bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packet, uint16_t subsecond) {    
     char outputString[9];
     bool pass = true;
@@ -249,6 +260,9 @@ bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packe
     return false;
 }
 
+/**
+ * @brief Decodes a bit from its samples: determines if n samples represent 0 or 1.
+ */
 bool blink_receiver_summarize_samples(uint8_t samples_per_bit, bool *samples) {
     uint8_t bright_sample_count = 0;
     for (int i = 0; i < samples_per_bit; i++) {
@@ -257,6 +271,9 @@ bool blink_receiver_summarize_samples(uint8_t samples_per_bit, bool *samples) {
     return bright_sample_count >= (samples_per_bit / 2);
 }
 
+/**
+ * @brief Read one sample
+ */
 blink_receiver_mode blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state, uint16_t subsecond) {
     blink_receiver_mode next_mode = waiting_for_start
         ? BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT
@@ -317,7 +334,9 @@ blink_receiver_mode blink_receiver_read_sample(bool waiting_for_start, blink_rec
 // Command execution 
 // ---------------------------
 
-//set local time to received timestamp
+/**
+ * @brief Sets the clock from a received time.
+ */
 void blink_receiver_handle_timeset(uint32_t packet, bool log)
 {
     blink_receiver_packet_data_t data = { .reg = packet };
@@ -342,7 +361,9 @@ void blink_receiver_handle_timeset(uint32_t packet, bool log)
     }
 }
 
-//set local date to received date
+/**
+ * @brief Sets the date from a received date.
+ */
 void blink_receiver_handle_dateset(uint32_t packet, bool log)
 {
     blink_receiver_packet_data_t data = { .reg = packet };
@@ -366,6 +387,9 @@ void blink_receiver_handle_dateset(uint32_t packet, bool log)
     }
 }
 
+/**
+ * @brief Stores a received coordinate.
+ */
 static void blink_receiver_handle_location(uint32_t packet, bool is_latitude, bool log) {
     blink_receiver_packet_data_t location_packet = { .reg = packet };
     int16_t value = (int16_t)location_packet.location.value;
@@ -391,6 +415,9 @@ static void blink_receiver_handle_location(uint32_t packet, bool is_latitude, bo
     }
 }
 
+/**
+ * @brief Sets the received time zone.
+ */
 static bool blink_receiver_handle_zone(uint32_t packet, bool log) {
     blink_receiver_packet_data_t zone_packet = { .reg = packet };
     if (zone_packet.zone.index >= NUM_ZONE_NAMES) {
@@ -407,6 +434,9 @@ static bool blink_receiver_handle_zone(uint32_t packet, bool log) {
     return true;
 }
 
+/**
+ * @brief Synchronizes the clock.
+ */
 void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond, bool log) {
     if (ms > 0) {
         watch_rtc_enable(false);
@@ -430,6 +460,9 @@ void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond, bool log) 
 // Settings 
 // ---------------------------
 
+/**
+ * @brief Displays the selected setting.
+ */
 static void blink_receiver_display_settings(blink_receiver_state_t *state) {
     char buf[6];
     watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
@@ -461,6 +494,9 @@ static void blink_receiver_display_settings(blink_receiver_state_t *state) {
     }
 }
 
+/**
+ * @brief Advances the selected setting.
+ */
 static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
     switch (state->settings_state) {
         case 0:
@@ -486,6 +522,9 @@ static void blink_receiver_advance_setting(blink_receiver_state_t *state) {
 // History 
 // ---------------------------
 
+/**
+ * @brief Displays the selected sample history.
+ */
 static void blink_receiver_display_history(blink_receiver_state_t *state) {
     char buf[11] = "          ";
     uint8_t bit_index = state->samples_per_bit > 8
@@ -505,12 +544,18 @@ static void blink_receiver_display_history(blink_receiver_state_t *state) {
     watch_display_string(buf, 0);
 }
 
+/**
+ * @brief Moves through the sample history.
+ */
 static void blink_receiver_move_history(blink_receiver_state_t *state, int8_t direction) {
     uint8_t history_length = (BITS_PER_PACKAGE + 1) * (state->samples_per_bit > 8 ? 2 : 1);
     state->history_position = (state->history_position + history_length + direction) % history_length;
     blink_receiver_display_history(state);
 }
 
+/**
+ * @brief Packs samples into a bit pattern.
+ */
 static uint16_t blink_receiver_pack_samples(uint8_t samples_per_bit, bool *samples) {
     uint16_t pattern = 0;
     for (uint8_t i = 0; i < samples_per_bit; i++) {
@@ -523,6 +568,9 @@ static uint16_t blink_receiver_pack_samples(uint8_t samples_per_bit, bool *sampl
 // Basic functions 
 // ---------------------------
 
+/**
+ * @brief Returns to the light display.
+ */
 static void blink_receiver_go_to_reading_state(blink_receiver_state_t *state) {
     state->mode = BLINK_RECEIVER_MODE_DISPLAY_CURRENT_LIGHT;
     movement_request_tick_frequency(state->idle_frequency);
