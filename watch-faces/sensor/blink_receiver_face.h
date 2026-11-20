@@ -121,7 +121,6 @@
 // Header 0 shall be unused, as receiving 0x00000000 is likely a transmission fail and should not be a valid packet with correct CRC
 #define BLINK_RECEIVER_HEADER_TIMESET 1
 #define BLINK_RECEIVER_HEADER_DATESET 2
-#define BLINK_RECEIVER_HEADER_HEARTBEAT 3
 #define BLINK_RECEIVER_HEADER_LATITUDE 4
 #define BLINK_RECEIVER_HEADER_LONGITUDE 5
 #define BLINK_RECEIVER_HEADER_SET_ZONE 6
@@ -152,7 +151,8 @@ typedef union {
     } header; // Header
     struct {
         uint32_t checksum : 8;
-        uint32_t unused : 2;
+        uint32_t unused : 1;
+        uint32_t sync : 1; //to indicate if watch clock shall be synchronized to timestamp
         uint32_t hour : 5;
         uint32_t minute : 6;
         uint32_t second : 6;

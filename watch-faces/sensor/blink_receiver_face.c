@@ -185,13 +185,10 @@ bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t 
     blink_receiver_packet_data_t data = { .reg = packet };
     switch(data.header.type) {
         case BLINK_RECEIVER_HEADER_TIMESET:     
-            blink_receiver_handle_timeset(packet, log);
+            blink_receiver_handle_command_time(packet, subsecond, log);
             break;
         case BLINK_RECEIVER_HEADER_DATESET:
-            blink_receiver_handle_dateset(packet, log);
-            break;
-        case BLINK_RECEIVER_HEADER_HEARTBEAT:
-            blink_receiver_handle_heartbeat((uint16_t)((((double)subsecond * 1000.0) / (double)frequency) + 0.5), subsecond, log);
+            blink_receiver_handle_command_date(packet, log);
             break;
         case BLINK_RECEIVER_HEADER_LATITUDE:
             blink_receiver_handle_location(packet, true, log);
@@ -206,7 +203,7 @@ bool blink_receiver_execute_packet(uint32_t packet, uint16_t subsecond, uint8_t 
             }
             break;
         case BLINK_RECEIVER_HEADER_TEST:
-            watch_display_text(WATCH_POSITION_TOP_LEFT, "TS"); // test header
+            watch_display_text(WATCH_POSITION_TOP_LEFT, "XX"); // test header
             break;
         default: 
             watch_display_text(WATCH_POSITION_TOP_LEFT, "MH"); // unknown header
@@ -261,7 +258,7 @@ bool blink_receiver_process_packet(blink_receiver_state_t *state, uint32_t packe
 }
 
 /**
- * @brief Decodes a bit from its samples: determines if n samples represent 0 or 1.
+ * @brief determines if samples represent 0 or 1.
  */
 bool blink_receiver_summarize_samples(uint8_t samples_per_bit, bool *samples) {
     uint8_t bright_sample_count = 0;
@@ -273,16 +270,16 @@ bool blink_receiver_summarize_samples(uint8_t samples_per_bit, bool *samples) {
 
 /**
  * @brief Read one sample
+ * @param waiting_for_start true if currently searching for start bit. false if start bit was received and actual packet is transmitted.
  */
 blink_receiver_mode blink_receiver_read_sample(bool waiting_for_start, blink_receiver_state_t *state, uint16_t subsecond) {
-    blink_receiver_mode next_mode = waiting_for_start
-        ? BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT
-        : BLINK_RECEIVER_MODE_RECORD;
+    blink_receiver_mode next_mode = waiting_for_start ? BLINK_RECEIVER_MODE_WAIT_FOR_START_BIT : BLINK_RECEIVER_MODE_RECORD;
 
     // here the actual readout of the sensor happens
     bool bright = blink_receiver_read_sensor() < state->light_level_border;
 
     if (!waiting_for_start || state->samples_received > 0 || bright) {
+        //collect one sample
         state->samples[state->samples_received] = bright;
         state->samples_received++;
 
@@ -291,6 +288,7 @@ blink_receiver_mode blink_receiver_read_sample(bool waiting_for_start, blink_rec
             state->samples_received = 0;
 
             if (waiting_for_start) {
+                //waiting for start bit
                 if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
                     //enough bright samples detected: transmission of package has started
                     state->bits_received = 0;
@@ -304,15 +302,15 @@ blink_receiver_mode blink_receiver_read_sample(bool waiting_for_start, blink_rec
                 }
             } else {
                 //start signal received: record the next packet (32 bit, 32*samples_per_bit samples)
-                state->sample_history[state->bits_received + 1] =
-                    blink_receiver_pack_samples(state->samples_per_bit, state->samples);
-                state->packets[state->current_package] = state->packets[state->current_package] << 1;
+                state->sample_history[state->bits_received + 1] = blink_receiver_pack_samples(state->samples_per_bit, state->samples);
+                state->packets[state->current_package] = state->packets[state->current_package] << 1; 
                 if (blink_receiver_summarize_samples(state->samples_per_bit, state->samples)) {
                     state->packets[state->current_package] += 1;
                 }
                 state->bits_received++;
 
-                if (state->bits_received == BITS_PER_PACKAGE) { // 32bit package complete
+                if (state->bits_received == BITS_PER_PACKAGE) { 
+                    // 32bit package complete
                     if (blink_receiver_process_packet(state, state->packets[state->current_package], subsecond)) {
                         //another package is coming
                         state->bits_received = 0;
@@ -335,12 +333,22 @@ blink_receiver_mode blink_receiver_read_sample(bool waiting_for_start, blink_rec
 // ---------------------------
 
 /**
- * @brief Sets the clock from a received time.
+ * @brief Sets the clock from a received time. Can synchronize to the timestamp when packet was received.  
  */
-void blink_receiver_handle_timeset(uint32_t packet, bool log)
+void blink_receiver_handle_command_time(uint32_t packet, uint16_t subsecond, bool log)
 {
     blink_receiver_packet_data_t data = { .reg = packet };
     
+    if (data.time.sync) {
+        //Synchronizes the clock. The transmitting program makes sure last bit of the packet 
+        //arrives exactly when a "new" second starts, so the timestamp of the packet is known by the millisecond (hich is 0).
+        //We stop the watch for a few ms (up to 999ms), until the watch is synchronized to the packet.
+        uint16_t ms= (uint16_t)((((double)subsecond * 1000.0) / (double)frequency) + 0.5); 
+        watch_rtc_enable(false);
+        delay_ms(ms); // delay clock
+        watch_rtc_enable(true);
+    }
+
     watch_date_time_t date_time = movement_get_local_date_time();
     date_time.unit.second = data.time.second;
     date_time.unit.minute = data.time.minute;
@@ -348,23 +356,28 @@ void blink_receiver_handle_timeset(uint32_t packet, bool log)
     movement_set_local_date_time(date_time);
 
     if (log) {
-        watch_display_text(WATCH_POSITION_TOP_LEFT, "TI");
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "T ");
         watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
         watch_display_text(WATCH_POSITION_BOTTOM, "      ");
-        char outputString2[3];
-        snprintf(outputString2, 3, "%02d", date_time.unit.hour);
+        char outputString[4];
+        snprintf(outputString, 3, "%02d", date_time.unit.hour);
         watch_display_string(outputString2, 4);
-        snprintf(outputString2, 3, "%02d", date_time.unit.minute);
+        snprintf(outputString, 3, "%02d", date_time.unit.minute);
         watch_display_string(outputString2, 6);
-        snprintf(outputString2, 3, "%02d", date_time.unit.second);
+        snprintf(outputString, 3, "%02d", date_time.unit.second);
         watch_display_string(outputString2, 8);
+        if(data.time.sync) {
+            snprintf(outputString, 4, "%3d", subsecond);
+            watch_display_string(outputString, 1);
+        }
+        watch_set_colon();
     }
 }
 
 /**
  * @brief Sets the date from a received date.
  */
-void blink_receiver_handle_dateset(uint32_t packet, bool log)
+void blink_receiver_handle_command_date(uint32_t packet, bool log)
 {
     blink_receiver_packet_data_t data = { .reg = packet };
 
@@ -377,6 +390,7 @@ void blink_receiver_handle_dateset(uint32_t packet, bool log)
     if (log) {
         watch_display_text(WATCH_POSITION_TOP_LEFT, "DA");
         watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
         char outputString[5];
         snprintf(outputString, 3, "%2d", data.date.day);
         watch_display_string(outputString, 2);
@@ -388,9 +402,29 @@ void blink_receiver_handle_dateset(uint32_t packet, bool log)
 }
 
 /**
- * @brief Stores a received coordinate.
+ * @brief Sets the received time zone.
  */
-static void blink_receiver_handle_location(uint32_t packet, bool is_latitude, bool log) {
+static bool blink_receiver_handle_command_zone(uint32_t packet, bool log) {
+    blink_receiver_packet_data_t zone_packet = { .reg = packet };
+    if (zone_packet.zone.index >= NUM_ZONE_NAMES) {
+        return false;
+    }
+    movement_set_timezone_index(zone_packet.zone.index);
+    movement_store_settings();
+
+    if (log) {
+        watch_display_text(WATCH_POSITION_TOP_LEFT, "ZN");
+        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
+        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
+        watch_display_text(WATCH_POSITION_BOTTOM, (char *)watch_utility_time_zone_name_at_index(zone_packet.zone.index));
+    }
+    return true;
+}
+
+/**
+ * @brief Stores a received coordinate (latiitude or longitude).
+ */
+static void blink_receiver_handle_command_location(uint32_t packet, bool is_latitude, bool log) {
     blink_receiver_packet_data_t location_packet = { .reg = packet };
     int16_t value = (int16_t)location_packet.location.value;
 
@@ -412,47 +446,6 @@ static void blink_receiver_handle_location(uint32_t packet, bool is_latitude, bo
         char buf[7];
         snprintf(buf, sizeof(buf), is_latitude ? "%c %04d" : "%c%05d", value < 0 ? '-' : '+', abs(value));
         watch_display_text(WATCH_POSITION_BOTTOM, buf);
-    }
-}
-
-/**
- * @brief Sets the received time zone.
- */
-static bool blink_receiver_handle_zone(uint32_t packet, bool log) {
-    blink_receiver_packet_data_t zone_packet = { .reg = packet };
-    if (zone_packet.zone.index >= NUM_ZONE_NAMES) {
-        return false;
-    }
-    movement_set_timezone_index(zone_packet.zone.index);
-    movement_store_settings();
-
-    if (log) {
-        watch_display_text(WATCH_POSITION_TOP_LEFT, "ZN");
-        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-        watch_display_text(WATCH_POSITION_BOTTOM, (char *)watch_utility_time_zone_name_at_index(zone_packet.zone.index));
-    }
-    return true;
-}
-
-/**
- * @brief Synchronizes the clock.
- */
-void blink_receiver_handle_heartbeat(uint16_t ms, uint16_t subsecond, bool log) {
-    if (ms > 0) {
-        watch_rtc_enable(false);
-        delay_ms(ms); // delay clock
-        watch_rtc_enable(true);
-    }
-
-    if (log) {
-        watch_display_text(WATCH_POSITION_TOP_LEFT, "HB");
-        watch_display_text(WATCH_POSITION_TOP_RIGHT, "  ");
-        watch_display_text(WATCH_POSITION_BOTTOM, "      ");
-        char outputString2[4];
-        snprintf(outputString2, 4, "%3d", ms);
-        watch_display_string(outputString2, 4);
-        snprintf(outputString2, 4, "%3d", subsecond);
-        watch_display_string(outputString2, 7);
     }
 }
 
